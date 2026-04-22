@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Klasseromsplanlegger</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+  :root {
+    --bg:#f5f0e8;--surface:#fffef9;--panel:#1a1a2e;--panel-light:#242440;
+    --accent:#e86b3e;--accent2:#4ecdc4;--text:#1a1a2e;--text-light:#6b6b8a;
+    --border:#d4cfc4;--desk-empty:#fffef9;--desk-occupied:#d4f0ed;--cell:48px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Mono',monospace;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+  header{background:var(--panel);color:#fff;padding:10px 20px;display:flex;align-items:center;gap:20px;flex-shrink:0;border-bottom:3px solid var(--accent);}
+  header h1{font-family:'Fraunces',serif;font-size:1.3rem;font-weight:300;letter-spacing:.05em;color:#fff;white-space:nowrap;}
+  header h1 span{color:var(--accent);font-style:italic;}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;}
+  .mode-group{display:flex;background:var(--panel-light);border-radius:6px;padding:2px;gap:2px;}
+  .mode-btn{padding:5px 12px;border:none;border-radius:4px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.7rem;font-weight:500;letter-spacing:.05em;text-transform:uppercase;transition:all .15s;color:#aaa;background:transparent;white-space:nowrap;}
+  .mode-btn.active{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(232,107,62,.4);}
+  .mode-btn:not(.active):hover{background:rgba(255,255,255,.1);color:#fff;}
+  .sep{width:1px;height:24px;background:rgba(255,255,255,.15);margin:0 4px;}
+  .tool-btn{padding:5px 12px;border:1px solid rgba(255,255,255,.2);border-radius:4px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.7rem;font-weight:500;letter-spacing:.05em;text-transform:uppercase;transition:all .15s;color:#ccc;background:transparent;white-space:nowrap;}
+  .tool-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .tool-btn.danger:hover{border-color:#e05252;color:#e05252;}
+  .grid-controls{display:flex;align-items:center;gap:8px;margin-left:auto;}
+  .grid-controls label{font-size:.65rem;color:#aaa;}
+  .grid-controls input[type=number]{width:45px;padding:3px 5px;background:var(--panel-light);border:1px solid rgba(255,255,255,.15);border-radius:3px;color:#fff;font-family:'DM Mono',monospace;font-size:.65rem;text-align:center;}
+  .legend{display:flex;align-items:center;gap:12px;padding:0 8px;}
+  .legend-item{display:flex;align-items:center;gap:4px;font-size:.6rem;color:#999;}
+  .legend-swatch{width:10px;height:10px;border-radius:2px;}
+
+  /* Language toggle */
+  #lang-toggle{padding:4px 10px;background:transparent;border:1px solid rgba(255,255,255,.25);border-radius:4px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.68rem;color:#ccc;letter-spacing:.06em;transition:all .15s;white-space:nowrap;}
+  #lang-toggle:hover{border-color:var(--accent2);color:var(--accent2);}
+
+  .app-body{display:flex;flex:1;overflow:hidden;}
+
+  /* ── LEFT PANEL ── */
+  .left-panel{width:210px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+  .panel-header{padding:10px 14px 8px;border-bottom:1px solid var(--border);font-size:.65rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--text-light);display:flex;align-items:center;justify-content:space-between;}
+  .panel-header .count{background:var(--accent);color:#fff;border-radius:10px;padding:1px 7px;font-size:.6rem;}
+  .student-input-wrap{padding:8px;border-bottom:1px solid var(--border);display:flex;gap:4px;}
+  .student-input{flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:'DM Mono',monospace;font-size:.7rem;background:var(--bg);color:var(--text);outline:none;}
+  .student-input:focus{border-color:var(--accent2);}
+  .add-btn{padding:5px 9px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.8rem;font-weight:bold;}
+  .add-btn:hover{background:#d05a2d;}
+  .student-list{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:3px;}
+  .student-chip{padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;font-size:.68rem;cursor:grab;display:flex;align-items:center;gap:5px;transition:all .1s;user-select:none;}
+  .student-chip:hover{border-color:var(--accent2);background:#f0fcfb;}
+  .student-chip.dragging{opacity:.4;}
+  .student-chip.seated{opacity:.5;border-style:dashed;cursor:default;}
+  .student-chip .s-avatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:500;flex-shrink:0;color:#fff;}
+  .student-chip .s-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .student-chip .s-group-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;border:1px solid rgba(0,0,0,.15);}
+  .student-chip .del-student{opacity:0;cursor:pointer;color:#e05252;font-size:.85rem;line-height:1;transition:opacity .1s;flex-shrink:0;}
+  .student-chip:hover .del-student{opacity:1;}
+  .student-chip.no-drag{cursor:not-allowed;opacity:.55;}
+  .student-chip.no-drag:hover{border-color:var(--border);background:var(--bg);}
+  #student-mode-hint{padding:5px 10px;font-size:.6rem;color:var(--text-light);background:#fdf8f0;border-bottom:1px solid var(--border);letter-spacing:.03em;display:none;text-align:center;}
+  body:not(.student-mode) #student-mode-hint{display:block;}
+  body.student-mode #student-mode-hint{display:none;}
+
+  /* ── SELECTION WIDGET ── */
+  #selection-widget{border-top:2px solid var(--accent2);background:var(--surface);padding:10px 12px;display:none;flex-direction:column;gap:8px;flex-shrink:0;}
+  #selection-widget.visible{display:flex;}
+  #selection-widget .sw-title{font-size:.62rem;color:var(--text-light);text-transform:uppercase;letter-spacing:.08em;}
+  #selection-widget .sw-title span{color:var(--accent2);}
+  #selection-widget .sw-colors{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;}
+  #selection-widget .sw-color{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s,border-color .1s;}
+  #selection-widget .sw-color:hover{transform:scale(1.2);}
+  #selection-widget .sw-color.active{border-color:#1a1a2e;transform:scale(1.15);}
+  #selection-widget .sw-actions{display:flex;gap:4px;flex-wrap:wrap;}
+  #selection-widget .sw-btn{flex:1;padding:4px;border-radius:4px;font-family:'DM Mono',monospace;font-size:.6rem;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text-light);transition:all .1s;text-align:center;white-space:nowrap;}
+  #selection-widget .sw-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  #selection-widget .sw-btn.danger:hover{border-color:#e05252;color:#e05252;}
+
+  /* ── PANEL ACTIONS ── */
+  .panel-actions{padding:6px 8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:4px;}
+  .panel-action-btn{width:100%;padding:5px 8px;border-radius:4px;font-family:'DM Mono',monospace;font-size:.63rem;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text-light);transition:all .1s;text-align:center;letter-spacing:.03em;}
+  .panel-action-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .panel-action-btn.accent{border-color:var(--accent);color:var(--accent);}
+  .panel-action-btn.accent:hover{background:var(--accent);color:#fff;}
+
+  .import-export-wrap{padding:8px;border-top:1px solid var(--border);display:flex;gap:4px;flex-direction:column;}
+  .import-export-wrap label,.import-export-wrap button{display:block;width:100%;padding:5px;text-align:center;border-radius:4px;font-family:'DM Mono',monospace;font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--bg);color:var(--text-light);}
+  .import-export-wrap label:hover,.import-export-wrap button:hover{border-color:var(--accent2);color:var(--accent2);}
+  .import-export-wrap button.export-btn{border-color:var(--accent);color:var(--accent);}
+  .import-export-wrap button.export-btn:hover{background:var(--accent);color:#fff;}
+  #import-file{display:none;}
+  .bulk-import-area{display:none;padding:6px;border-top:1px solid var(--border);}
+  .bulk-import-area.visible{display:block;}
+  .bulk-textarea{width:100%;height:70px;padding:5px;font-family:'DM Mono',monospace;font-size:.65rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);resize:none;outline:none;}
+  .bulk-textarea:focus{border-color:var(--accent2);}
+  .bulk-actions{display:flex;gap:4px;margin-top:4px;}
+  .bulk-actions button{flex:1;padding:4px;border-radius:3px;border:1px solid var(--border);font-family:'DM Mono',monospace;font-size:.62rem;cursor:pointer;background:var(--bg);color:var(--text-light);}
+  .bulk-actions button:first-child{border-color:var(--accent2);color:var(--accent2);}
+
+  /* ── CANVAS ── */
+  .canvas-area{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  .canvas-scroll{flex:1;overflow:auto;background:var(--bg);}
+  #classroom-grid{position:relative;margin:20px;display:inline-block;}
+  #desks-layer{position:absolute;top:0;left:0;z-index:2;pointer-events:auto;}
+
+  /* ── DESK ── */
+  .desk{position:absolute;width:calc(var(--cell) - 4px);height:calc(var(--cell) - 4px);background:var(--desk-empty);border:2px solid var(--border);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.55rem;transition:border-color .12s,box-shadow .12s;pointer-events:all;user-select:none;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .desk.occupied{background:var(--desk-occupied);border-color:#6ecfc9;}
+  .desk.drag-over{border-color:var(--accent)!important;box-shadow:0 0 0 3px rgba(232,107,62,.3)!important;}
+  .desk.selected{box-shadow:0 0 0 3px rgba(78,205,196,.7),0 2px 8px rgba(0,0,0,.15)!important;border-color:var(--accent2)!important;}
+  .desk.desk-dragging{opacity:.3;}
+  .desk .desk-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:600;color:#fff;margin-bottom:2px;flex-shrink:0;}
+  .desk .desk-student{font-size:.58rem;font-weight:500;text-align:center;line-height:1.2;padding:0 3px;word-break:break-word;}
+  .desk .desk-number{font-size:.55rem;color:#bbb;font-weight:400;}
+
+  /* ── INTERACTION LAYER ── */
+  #interaction-layer{position:absolute;top:0;left:0;z-index:10;}
+
+  /* ── CTX MENU ── */
+  #ctx-menu{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;padding:4px 0;min-width:150px;display:none;}
+  #ctx-menu.visible{display:block;}
+  .ctx-item{padding:6px 14px;font-size:.68rem;cursor:pointer;color:var(--text);transition:background .1s;letter-spacing:.03em;}
+  .ctx-item:hover{background:var(--bg);}
+  .ctx-item.danger{color:#e05252;}
+  .ctx-sep{height:1px;background:var(--border);margin:3px 0;}
+
+  /* ── STATUS BAR ── */
+  .status-bar{background:var(--panel);color:#888;font-size:.62rem;padding:4px 14px;display:flex;gap:16px;border-top:1px solid rgba(255,255,255,.05);flex-shrink:0;letter-spacing:.05em;}
+  .status-bar span{color:#ccc;}
+  .status-bar .mode-indicator{color:var(--accent);font-weight:500;}
+
+  /* ── DRAG GHOST ── */
+  #drag-ghost{position:fixed;pointer-events:none;z-index:10000;opacity:.9;transform:translate(-50%,-50%) rotate(2deg) scale(1.04);background:var(--panel);color:#fff;padding:5px 12px;border-radius:6px;font-size:.7rem;display:none;box-shadow:0 8px 20px rgba(0,0,0,.3);border:2px solid var(--accent);white-space:nowrap;}
+
+  /* ── AUTOSAVE ── */
+  #autosave-indicator{position:fixed;bottom:32px;right:12px;font-size:.6rem;color:var(--text-light);opacity:0;transition:opacity .4s;pointer-events:none;background:var(--surface);border:1px solid var(--border);padding:3px 8px;border-radius:20px;}
+  #autosave-indicator.show{opacity:1;}
+
+  body.wall-mode .canvas-scroll{cursor:crosshair;}
+  .student-list::-webkit-scrollbar,.canvas-scroll::-webkit-scrollbar{width:6px;height:6px;}
+  .student-list::-webkit-scrollbar-thumb,.canvas-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+</style>
+</head>
+<body class="desk-mode">
+
+<header>
+  <h1 id="app-title">Klasserom <span>Planlegger</span></h1>
+  <div class="toolbar">
+    <div class="mode-group">
+      <button class="mode-btn" id="btn-wall" onclick="setMode('wall')" data-i18n="modeWall"></button>
+      <button class="mode-btn active" id="btn-desk" onclick="setMode('desk')" data-i18n="modeDesk"></button>
+      <button class="mode-btn" id="btn-student" onclick="setMode('student')" data-i18n="modeStudent"></button>
+    </div>
+    <div class="sep"></div>
+    <button class="tool-btn danger" onclick="clearWalls()" data-i18n="clearWalls"></button>
+    <div class="sep"></div>
+    <div class="grid-controls">
+      <label data-i18n="grid"></label>
+      <input type="number" id="grid-cols" value="20" min="5" max="40" onchange="resizeGrid()"> ×
+      <input type="number" id="grid-rows" value="15" min="5" max="30" onchange="resizeGrid()">
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:#1a1a2e"></div><span data-i18n="legendWall"></span></div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--desk-empty);border:1px solid var(--border)"></div><span data-i18n="legendEmpty"></span></div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--desk-occupied)"></div><span data-i18n="legendSeated"></span></div>
+    </div>
+    <button id="lang-toggle" onclick="toggleLang()">EN</button>
+  </div>
+</header>
+
+<div class="app-body">
+  <div class="left-panel">
+    <div class="panel-header"><span data-i18n="panelStudents"></span> <span class="count" id="student-count">0</span></div>
+    <div class="student-input-wrap">
+      <input class="student-input" id="student-name-input" data-i18n-placeholder="namePlaceholder" onkeydown="if(event.key==='Enter')addStudent()">
+      <button class="add-btn" onclick="addStudent()">+</button>
+    </div>
+    <div style="padding:0 8px 4px;border-bottom:1px solid var(--border)">
+      <button style="width:100%;padding:4px;background:transparent;border:1px dashed var(--border);border-radius:4px;font-family:DM Mono,monospace;font-size:.63rem;color:var(--text-light);cursor:pointer;letter-spacing:.05em" onclick="toggleBulkImport()" data-i18n="bulkAdd"></button>
+    </div>
+    <div class="bulk-import-area" id="bulk-import-area">
+      <textarea class="bulk-textarea" id="bulk-textarea" data-i18n-placeholder="bulkPlaceholder"></textarea>
+      <div class="bulk-actions">
+        <button onclick="bulkAddStudents()" data-i18n="bulkAddAll"></button>
+        <button onclick="toggleBulkImport()" data-i18n="cancel"></button>
+      </div>
+    </div>
+
+    <div id="selection-widget">
+      <div class="sw-title"><span id="sw-count">0</span> <span data-i18n="swDesksSelected"></span></div>
+      <div class="sw-colors" id="sw-colors"></div>
+      <div class="sw-actions">
+        <button class="sw-btn" onclick="clearGroupColor()" data-i18n="swClearColor"></button>
+        <button class="sw-btn" onclick="deselectAll()" data-i18n="swDeselect"></button>
+        <button class="sw-btn danger" onclick="deleteSelectedDesks()" data-i18n="swDelete"></button>
+      </div>
+    </div>
+
+    <div id="student-mode-hint" data-i18n="studentModeHint"></div>
+    <div class="student-list" id="student-list"></div>
+
+    <div class="panel-actions">
+      <button class="panel-action-btn accent" onclick="randomizeSeating()" data-i18n="randomize"></button>
+      <button class="panel-action-btn" onclick="clearAllSeating()" data-i18n="clearSeating"></button>
+    </div>
+
+    <div class="import-export-wrap">
+      <button class="export-btn" onclick="exportJSON()" data-i18n="exportJson"></button>
+      <label for="import-file" data-i18n="importJson"></label>
+      <input type="file" id="import-file" accept=".json" onchange="importJSON(event)">
+    </div>
+  </div>
+
+  <div class="canvas-area">
+    <div class="canvas-scroll" id="canvas-scroll">
+      <div id="classroom-grid">
+        <canvas id="grid-bg-canvas"></canvas>
+        <canvas id="wall-canvas"></canvas>
+        <div id="desks-layer"></div>
+        <canvas id="interaction-layer"></canvas>
+      </div>
+    </div>
+    <div class="status-bar">
+      <span><span data-i18n="statusMode"></span>: <span class="mode-indicator" id="status-mode">PULT</span></span>
+      <span><span data-i18n="statusDesks"></span>: <span id="status-desks">0</span></span>
+      <span><span data-i18n="statusSeated"></span>: <span id="status-seated">0</span></span>
+      <span><span data-i18n="statusGrid"></span>: <span id="status-grid">20×15</span></span>
+      <span id="status-hint"></span>
+    </div>
+  </div>
+</div>
+
+<div id="drag-ghost"></div>
+<div id="drag-img" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:.01;pointer-events:none;background:transparent;"></div>
+<div id="ctx-menu"></div>
+<div id="autosave-indicator">✓</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// I18N
+// ══════════════════════════════════════════════════════════════════════
+const STRINGS = {
+  no: {
+    appTitle: 'Klasserom <span>Planlegger</span>',
+    modeWall: '✏ Vegger', modeDesk: '⊞ Pulter', modeStudent: '⇌ Elever',
+    clearWalls: '⌫ Slett vegger',
+    grid: 'Rutenett',
+    legendWall: 'Vegg', legendEmpty: 'Tom', legendSeated: 'Opptatt',
+    panelStudents: 'Elever',
+    namePlaceholder: 'Navn…',
+    bulkAdd: 'Legg til flere (én per linje)',
+    bulkPlaceholder: 'Ola\nKari\nPer\n…',
+    bulkAddAll: 'Legg til alle', cancel: 'Avbryt',
+    swDesksSelected: 'pult(er) valgt',
+    swClearColor: '✕ Farge', swDeselect: '⊡ Fjern valg', swDelete: '⌫ Slett',
+    studentModeHint: '⇄ Bytt til Elever for å dra',
+    randomize: '⇄ Tilfeldig plassering',
+    clearSeating: '↩ Fjern alle plasseringer',
+    exportJson: '⬇ Eksporter JSON', importJson: '⬆ Importer JSON',
+    statusMode: 'Modus', statusDesks: 'Pulter', statusSeated: 'Plassert', statusGrid: 'Rutenett',
+    hintWall: 'Klikk og dra langs rutelinjer for å tegne vegger · Samme linje sletter',
+    hintDesk: 'Klikk tom celle for å legge til pult · Dra for å tegne rad · Klikk pult for å velge · Dra pult for å flytte',
+    hintStudent: 'Dra fra liste til pult · Dra mellom pulter for å bytte',
+    modeWallUpper: 'VEGG', modeDeskUpper: 'PULT', modeStudentUpper: 'ELEV',
+    confirmClearWalls: 'Slette alle vegger?',
+    ctxDesk: 'Pult',
+    ctxRemove: 'Fjern',
+    ctxDelete: 'Slett pult',
+    autosave: '✓ Lagret',
+    langBtn: 'EN',
+    deskLabel: 'Pult',
+  },
+  en: {
+    appTitle: 'Classroom <span>Arranger</span>',
+    modeWall: '✏ Walls', modeDesk: '⊞ Desks', modeStudent: '⇌ Students',
+    clearWalls: '⌫ Clear Walls',
+    grid: 'Grid',
+    legendWall: 'Wall', legendEmpty: 'Empty', legendSeated: 'Seated',
+    panelStudents: 'Students',
+    namePlaceholder: 'Name…',
+    bulkAdd: 'Bulk add (one per line)',
+    bulkPlaceholder: 'Alice\nBob\nCharlie\n…',
+    bulkAddAll: 'Add All', cancel: 'Cancel',
+    swDesksSelected: 'desk(s) selected',
+    swClearColor: '✕ Color', swDeselect: '⊡ Deselect', swDelete: '⌫ Delete',
+    studentModeHint: '⇄ Switch to Students mode to drag',
+    randomize: '⇄ Randomize seating',
+    clearSeating: '↩ Clear all seating',
+    exportJson: '⬇ Export JSON', importJson: '⬆ Import JSON',
+    statusMode: 'Mode', statusDesks: 'Desks', statusSeated: 'Seated', statusGrid: 'Grid',
+    hintWall: 'Click & drag on gridlines to draw walls · Same line erases',
+    hintDesk: 'Click empty cell to add desk · Drag to draw a row · Click desk to select · Drag desk to move',
+    hintStudent: 'Drag from list to desk · Drag between desks to move/swap',
+    modeWallUpper: 'WALL', modeDeskUpper: 'DESK', modeStudentUpper: 'STUDENT',
+    confirmClearWalls: 'Clear all walls?',
+    ctxDesk: 'Desk',
+    ctxRemove: 'Remove',
+    ctxDelete: 'Delete Desk',
+    autosave: '✓ Saved',
+    langBtn: 'NO',
+    deskLabel: 'Desk',
+  }
+};
+
+let lang = 'no';
+
+function t(key) { return STRINGS[lang][key] || STRINGS.en[key] || key; }
+
+function applyTranslations() {
+  document.documentElement.lang = lang;
+  document.title = lang === 'no' ? 'Klasseromsplanlegger' : 'Classroom Arranger';
+  document.getElementById('app-title').innerHTML = t('appTitle');
+  document.getElementById('lang-toggle').textContent = t('langBtn');
+  document.getElementById('autosave-indicator').textContent = t('autosave');
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  // Bulk textarea placeholder
+  const bt = document.getElementById('bulk-textarea');
+  if(bt) bt.placeholder = t('bulkPlaceholder');
+
+  // Re-apply mode hint
+  if(typeof mode !== 'undefined') {
+    const hints = { wall: t('hintWall'), desk: t('hintDesk'), student: t('hintStudent') };
+    document.getElementById('status-hint').textContent = hints[mode] || '';
+    const modeKeys = { wall: t('modeWallUpper'), desk: t('modeDeskUpper'), student: t('modeStudentUpper') };
+    document.getElementById('status-mode').textContent = modeKeys[mode] || mode.toUpperCase();
+  }
+
+  // Re-render things that have inline strings
+  if(typeof renderDesks === 'function') renderDesks();
+  if(typeof renderStudentList === 'function') renderStudentList();
+}
+
+function toggleLang() {
+  lang = lang === 'no' ? 'en' : 'no';
+  applyTranslations();
+  scheduleSave();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════
+const CELL = 48;
+let COLS = 20, ROWS = 15;
+let mode = 'desk';
+
+let walls = new Set();
+let desks = [];
+let students = [];
+let deskCounter = 0, studentCounter = 0;
+let selectedDesks = new Set();
+
+let deskDrawing = false, deskDrawStartCol = 0, deskDrawStartRow = 0;
+let deskDrawAxis = null, deskDrawLastCell = null;
+let deskDragState = null;
+let studentDeskDrag = null;
+
+let wallDrawing = false, wallErasing = false, wallLastCell = null;
+let wallAxis = null, wallAxisFixed = null;
+
+let ic;
+let saveTimer = null;
+
+// ══════════════════════════════════════════════════════════════════════
+// AUTOSAVE
+// ══════════════════════════════════════════════════════════════════════
+const SAVE_KEY = 'classroom-arranger-v1';
+
+function saveState() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      version:1, grid:{cols:COLS,rows:ROWS},
+      walls:[...walls], desks, students, mode, lang
+    }));
+    const ind = document.getElementById('autosave-indicator');
+    ind.textContent = t('autosave');
+    ind.classList.add('show');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>ind.classList.remove('show'), 1200);
+  } catch(e) {}
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveState, 600);
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    COLS = data.grid?.cols || 20;
+    ROWS = data.grid?.rows || 15;
+    document.getElementById('grid-cols').value = COLS;
+    document.getElementById('grid-rows').value = ROWS;
+    walls = new Set(data.walls || []);
+    desks = (data.desks || []).map(d => ({...d, groupColor: d.groupColor||null}));
+    students = data.students || [];
+    deskCounter = desks.length ? Math.max(...desks.map(d=>d.id)) : 0;
+    studentCounter = students.length ? Math.max(...students.map(s=>s.id)) : 0;
+    if (data.lang) lang = data.lang;
+    return data.mode || 'desk';
+  } catch(e) { return null; }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// COLOURS
+// ══════════════════════════════════════════════════════════════════════
+const AVATAR_COLORS = ['#e8523a','#3aabe8','#3ae88a','#e8a83a','#9b3ae8','#e83a9b','#3ae8d4','#8ae83a','#e8e83a','#3a5be8','#e86b3a','#3ae86b','#c73ae8','#e8c73a','#3ac7e8'];
+const GROUP_COLORS  = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63','#00bcd4','#8bc34a','#ff5722','#607d8b'];
+
+function getColor(idx) { return AVATAR_COLORS[idx % AVATAR_COLORS.length]; }
+function initials(name) { return name.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?'; }
+function isColorDark(hex) {
+  if(!hex||!hex.startsWith('#')) return false;
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return (0.299*r+0.587*g+0.114*b)<160;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// GRID SETUP
+// ══════════════════════════════════════════════════════════════════════
+function setupGrid() {
+  const W=COLS*CELL, H=ROWS*CELL;
+  document.getElementById('classroom-grid').style.cssText=`width:${W}px;height:${H}px`;
+  ['grid-bg-canvas','wall-canvas','interaction-layer'].forEach((id,i)=>{
+    const c=document.getElementById(id);
+    c.width=W; c.height=H;
+    Object.assign(c.style,{width:W+'px',height:H+'px',position:'absolute',top:'0',left:'0',zIndex:String([0,1,10][i])});
+  });
+  const dl=document.getElementById('desks-layer');
+  Object.assign(dl.style,{position:'absolute',top:'0',left:'0',zIndex:'2',pointerEvents:'auto',width:W+'px',height:H+'px'});
+  drawGridBg(); renderWalls();
+  document.getElementById('status-grid').textContent=`${COLS}×${ROWS}`;
+}
+
+function drawGridBg() {
+  const c=document.getElementById('grid-bg-canvas'),ctx=c.getContext('2d');
+  ctx.fillStyle='#f5f0e8'; ctx.fillRect(0,0,c.width,c.height);
+  ctx.strokeStyle='#ddd8cc'; ctx.lineWidth=0.5;
+  for(let i=0;i<=COLS;i++){ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,c.height);ctx.stroke();}
+  for(let i=0;i<=ROWS;i++){ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(c.width,i*CELL);ctx.stroke();}
+}
+
+function resizeGrid() {
+  COLS=Math.max(5,Math.min(40,+document.getElementById('grid-cols').value||20));
+  ROWS=Math.max(5,Math.min(30,+document.getElementById('grid-rows').value||15));
+  desks=desks.filter(d=>d.col<COLS&&d.row<ROWS);
+  walls=new Set([...walls].filter(k=>{const[,r,c]=k.split(':');return+r>=0&&+r<=ROWS&&+c>=0&&+c<=COLS;}));
+  selectedDesks.clear();
+  setupGrid(); renderDesks(); updateStatus(); hideWidget(); scheduleSave();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// WALLS
+// ══════════════════════════════════════════════════════════════════════
+function renderWalls() {
+  const c=document.getElementById('wall-canvas'),ctx=c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  ctx.strokeStyle='#1a1a2e'; ctx.lineWidth=3; ctx.lineCap='square';
+  for(const key of walls){
+    const[tp,r,col]=key.split(':');
+    ctx.beginPath();
+    if(tp==='h'){ctx.moveTo(+col*CELL,(+r+1)*CELL);ctx.lineTo((+col+1)*CELL,(+r+1)*CELL);}
+    else{ctx.moveTo((+col+1)*CELL,+r*CELL);ctx.lineTo((+col+1)*CELL,(+r+1)*CELL);}
+    ctx.stroke();
+  }
+}
+
+function clearWalls() {
+  if(!confirm(t('confirmClearWalls'))) return;
+  walls.clear(); renderWalls(); scheduleSave();
+}
+
+function getSnapEdge(e) {
+  const rect=ic.getBoundingClientRect();
+  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  const col=Math.round(x/CELL), row=Math.round(y/CELL);
+  const nearH=Math.abs(y-row*CELL), nearV=Math.abs(x-col*CELL);
+  if(nearH<nearV){
+    if(row<=0||row>=ROWS) return null;
+    const c=Math.floor(x/CELL);
+    return (c<0||c>=COLS)?null:{key:`h:${row-1}:${c}`,axis:'h',row:row-1,col:c};
+  } else {
+    if(col<=0||col>=COLS) return null;
+    const r=Math.floor(y/CELL);
+    return (r<0||r>=ROWS)?null:{key:`v:${r}:${col-1}`,axis:'v',row:r,col:col-1};
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PREVIEW
+// ══════════════════════════════════════════════════════════════════════
+function clearPreview() { ic.getContext('2d').clearRect(0,0,ic.width,ic.height); }
+
+function drawWallPreview(key) {
+  clearPreview(); if(!key) return;
+  const ctx=ic.getContext('2d'), [tp,r,col]=key.split(':');
+  ctx.strokeStyle=walls.has(key)?'rgba(224,82,82,.7)':'rgba(78,205,196,.85)';
+  ctx.lineWidth=4; ctx.lineCap='square'; ctx.setLineDash([6,4]);
+  ctx.beginPath();
+  if(tp==='h'){ctx.moveTo(+col*CELL,(+r+1)*CELL);ctx.lineTo((+col+1)*CELL,(+r+1)*CELL);}
+  else{ctx.moveTo((+col+1)*CELL,+r*CELL);ctx.lineTo((+col+1)*CELL,(+r+1)*CELL);}
+  ctx.stroke(); ctx.setLineDash([]);
+}
+
+function drawDeskPreview(hCol,hRow,drawing,sCol,sRow,axis) {
+  clearPreview(); if(hCol<0) return;
+  const ctx=ic.getContext('2d');
+  const cells=[];
+  if(!drawing){ cells.push({col:hCol,row:hRow}); }
+  else if(axis==='h'||axis===null){
+    const r=sRow,c0=Math.min(sCol,hCol),c1=Math.max(sCol,hCol);
+    for(let c=c0;c<=c1;c++) cells.push({col:c,row:r});
+  } else {
+    const c=sCol,r0=Math.min(sRow,hRow),r1=Math.max(sRow,hRow);
+    for(let r=r0;r<=r1;r++) cells.push({col:c,row:r});
+  }
+  for(const{col,row}of cells){
+    const has=!!desks.find(d=>d.col===col&&d.row===row);
+    ctx.fillStyle=has?'rgba(255,200,100,.3)':'rgba(78,205,196,.3)';
+    ctx.strokeStyle=has?'rgba(255,160,0,.8)':'rgba(78,205,196,.9)';
+    ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(col*CELL+3,row*CELL+3,CELL-6,CELL-6,5);
+    ctx.fill(); ctx.stroke();
+  }
+}
+
+function drawDeskDragPreview(col,row,deskId) {
+  clearPreview(); if(col<0||col>=COLS||row<0||row>=ROWS) return;
+  const ctx=ic.getContext('2d');
+  const occupied=desks.find(d=>d.id!==deskId&&d.col===col&&d.row===row);
+  ctx.fillStyle=occupied?'rgba(255,230,109,.35)':'rgba(78,205,196,.3)';
+  ctx.strokeStyle=occupied?'rgba(200,160,0,.85)':'rgba(78,205,196,.9)';
+  ctx.lineWidth=2;
+  ctx.beginPath(); ctx.roundRect(col*CELL+3,row*CELL+3,CELL-6,CELL-6,5);
+  ctx.fill(); ctx.stroke();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DESKS
+// ══════════════════════════════════════════════════════════════════════
+function addDeskAt(col,row) {
+  if(desks.find(d=>d.col===col&&d.row===row)) return;
+  desks.push({id:++deskCounter,col,row,studentId:null,groupColor:null});
+  renderDesks(); updateStatus(); scheduleSave();
+}
+function removeDesk(id) {
+  desks=desks.filter(d=>d.id!==id); selectedDesks.delete(id);
+  renderDesks(); updateStatus(); updateWidget(); scheduleSave();
+}
+function deleteSelectedDesks() {
+  desks=desks.filter(d=>!selectedDesks.has(d.id)); selectedDesks.clear();
+  renderDesks(); updateStatus(); hideWidget(); scheduleSave();
+}
+function clearGroupColor() {
+  for(const id of selectedDesks){const d=desks.find(x=>x.id===id);if(d)d.groupColor=null;}
+  renderDesks(); renderStudentList(); updateWidget(); scheduleSave();
+}
+function applyGroupColor(color) {
+  for(const id of selectedDesks){const d=desks.find(x=>x.id===id);if(d)d.groupColor=color;}
+  renderDesks(); renderStudentList(); updateWidget(); scheduleSave();
+}
+function deselectAll() { selectedDesks.clear(); renderDesks(); hideWidget(); }
+
+function renderDesks() {
+  const layer=document.getElementById('desks-layer');
+  layer.innerHTML='';
+  for(const desk of desks){
+    const gc=desk.groupColor, sel=selectedDesks.has(desk.id);
+    const el=document.createElement('div');
+    el.className='desk'+(desk.studentId?' occupied':'')+(sel?' selected':'');
+    el.id=`desk-${desk.id}`;
+    el.style.left=desk.col*CELL+2+'px';
+    el.style.top=desk.row*CELL+2+'px';
+    if(gc){el.style.background=gc;el.style.borderColor=sel?'':gc;}
+    else{el.style.background='';el.style.borderColor='';}
+
+    const student=desk.studentId?students.find(s=>s.id===desk.studentId):null;
+    if(student){
+      const av=document.createElement('div');
+      av.className='desk-avatar'; av.style.background=student.color;
+      av.textContent=initials(student.name); el.appendChild(av);
+      const nm=document.createElement('div');
+      nm.className='desk-student';
+      if(gc) nm.style.color=isColorDark(gc)?'#fff':'#1a1a2e';
+      nm.textContent=student.name.split(' ')[0]; el.appendChild(nm);
+    } else {
+      const num=document.createElement('div');
+      num.className='desk-number';
+      if(gc) num.style.color=isColorDark(gc)?'rgba(255,255,255,.6)':'rgba(0,0,0,.4)';
+      num.textContent='#'+desk.id; el.appendChild(num);
+    }
+
+    el.addEventListener('contextmenu',e=>{e.preventDefault();showCtxMenu(e,desk.id);});
+    el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drag-over');});
+    el.addEventListener('dragleave',()=>el.classList.remove('drag-over'));
+    el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drag-over');handleDropOnDesk(desk.id,e);});
+    layer.appendChild(el);
+  }
+  renderStudentList();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SELECTION WIDGET
+// ══════════════════════════════════════════════════════════════════════
+function buildWidget() {
+  const wrap=document.getElementById('sw-colors');
+  wrap.innerHTML='';
+  GROUP_COLORS.forEach(c=>{
+    const s=document.createElement('div');
+    s.className='sw-color'; s.style.background=c; s.title=c;
+    s.addEventListener('click',()=>applyGroupColor(c));
+    wrap.appendChild(s);
+  });
+}
+function updateWidget() {
+  const w=document.getElementById('selection-widget');
+  if(selectedDesks.size===0){hideWidget();return;}
+  document.getElementById('sw-count').textContent=selectedDesks.size;
+  const activeColors=new Set(desks.filter(d=>selectedDesks.has(d.id)&&d.groupColor).map(d=>d.groupColor));
+  document.querySelectorAll('.sw-color').forEach(el=>{
+    el.classList.toggle('active',activeColors.has(el.title));
+  });
+  w.classList.add('visible');
+}
+function hideWidget(){document.getElementById('selection-widget').classList.remove('visible');}
+
+// ══════════════════════════════════════════════════════════════════════
+// SEATING
+// ══════════════════════════════════════════════════════════════════════
+function randomizeSeating() {
+  desks.forEach(d=>d.studentId=null);
+  const ss=[...students].sort(()=>Math.random()-.5);
+  const ds=[...desks].sort(()=>Math.random()-.5);
+  for(let i=0;i<Math.min(ss.length,ds.length);i++) ds[i].studentId=ss[i].id;
+  renderDesks(); updateStatus(); scheduleSave();
+}
+function clearAllSeating() {
+  desks.forEach(d=>d.studentId=null);
+  renderDesks(); updateStatus(); scheduleSave();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// INTERACTION LAYER
+// ══════════════════════════════════════════════════════════════════════
+let icMouseDownInfo = null;
+
+function getCellXY(e) {
+  const rect=ic.getBoundingClientRect();
+  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  const col=Math.floor(x/CELL), row=Math.floor(y/CELL);
+  return (col>=0&&col<COLS&&row>=0&&row<ROWS)?{x,y,col,row}:null;
+}
+
+function setupInteractionLayer() {
+  ic=document.getElementById('interaction-layer');
+
+  ic.addEventListener('mousedown',e=>{
+    if(e.button!==0) return;
+    e.preventDefault();
+    if(mode==='wall'){
+      const snap=getSnapEdge(e); if(!snap) return;
+      wallErasing=walls.has(snap.key); wallDrawing=true;
+      wallAxis=snap.axis; wallAxisFixed=snap.axis==='h'?snap.row:snap.col;
+      if(wallErasing)walls.delete(snap.key);else walls.add(snap.key);
+      renderWalls(); drawWallPreview(snap.key); wallLastCell=snap.key;
+      return;
+    }
+    if(mode==='desk'){
+      const cell=getCellXY(e); if(!cell) return;
+      const existing=desks.find(d=>d.col===cell.col&&d.row===cell.row);
+      icMouseDownInfo={x:e.clientX,y:e.clientY,col:cell.col,row:cell.row,deskId:existing?.id??null};
+      if(existing){
+        deskDragState={deskId:existing.id,origCol:existing.col,origRow:existing.row,
+          startX:e.clientX,startY:e.clientY,
+          gridRect:document.getElementById('classroom-grid').getBoundingClientRect(),moved:false};
+      } else {
+        deskDrawing=true; deskDrawAxis=null;
+        deskDrawStartCol=cell.col; deskDrawStartRow=cell.row;
+        deskDrawLastCell=`${cell.col}:${cell.row}`;
+        addDeskAt(cell.col,cell.row);
+        drawDeskPreview(cell.col,cell.row,false,0,0,null);
+      }
+    }
+  });
+
+  ic.addEventListener('mousemove',e=>{
+    const rect=ic.getBoundingClientRect();
+    const x=e.clientX-rect.left, y=e.clientY-rect.top;
+    if(mode==='wall'){
+      if(wallDrawing){
+        let key=null;
+        if(wallAxis==='h'){const c=Math.floor(x/CELL);if(c>=0&&c<COLS)key=`h:${wallAxisFixed}:${c}`;}
+        else{const r=Math.floor(y/CELL);if(r>=0&&r<ROWS)key=`v:${r}:${wallAxisFixed}`;}
+        if(key&&key!==wallLastCell){if(wallErasing)walls.delete(key);else walls.add(key);renderWalls();wallLastCell=key;}
+        drawWallPreview(key);
+      } else { drawWallPreview(getSnapEdge(e)?.key??null); }
+      return;
+    }
+    if(mode==='desk'){
+      const col=Math.floor(x/CELL), row=Math.floor(y/CELL);
+      const inBounds=col>=0&&col<COLS&&row>=0&&row<ROWS;
+      if(deskDragState&&icMouseDownInfo){
+        const dx=e.clientX-icMouseDownInfo.x, dy=e.clientY-icMouseDownInfo.y;
+        if(!deskDragState.moved&&(Math.abs(dx)>5||Math.abs(dy)>5)){
+          deskDragState.moved=true;
+          document.getElementById(`desk-${deskDragState.deskId}`)?.classList.add('desk-dragging');
+          const g=document.getElementById('drag-ghost');
+          g.textContent=`${t('deskLabel')} #${deskDragState.deskId}`; g.style.display='block';
+        }
+        if(deskDragState.moved){
+          const g=document.getElementById('drag-ghost');
+          g.style.left=e.clientX+'px'; g.style.top=e.clientY+'px';
+          if(inBounds) drawDeskDragPreview(col,row,deskDragState.deskId); else clearPreview();
+        }
+        return;
+      }
+      if(deskDrawing&&inBounds){
+        const dc=Math.abs(col-deskDrawStartCol), dr=Math.abs(row-deskDrawStartRow);
+        if(deskDrawAxis===null&&(dc>0||dr>0)) deskDrawAxis=dc>=dr?'h':'v';
+        const axis=deskDrawAxis||'h';
+        const cellKey=`${col}:${row}`;
+        if(cellKey!==deskDrawLastCell){
+          if(axis==='h'){
+            const r=deskDrawStartRow,c0=Math.min(deskDrawStartCol,col),c1=Math.max(deskDrawStartCol,col);
+            for(let c=c0;c<=c1;c++) if(!desks.find(d=>d.col===c&&d.row===r)) addDeskAt(c,r);
+          } else {
+            const c=deskDrawStartCol,r0=Math.min(deskDrawStartRow,row),r1=Math.max(deskDrawStartRow,row);
+            for(let r=r0;r<=r1;r++) if(!desks.find(d=>d.col===c&&d.row===r)) addDeskAt(c,r);
+          }
+          deskDrawLastCell=cellKey;
+        }
+        drawDeskPreview(col,row,true,deskDrawStartCol,deskDrawStartRow,deskDrawAxis);
+        return;
+      }
+      if(inBounds) drawDeskPreview(col,row,false,0,0,null); else clearPreview();
+    }
+  });
+
+  ic.addEventListener('mouseleave',()=>{
+    if(!wallDrawing&&!deskDrawing&&!deskDragState) clearPreview();
+  });
+
+  // Forward drag events through the canvas (for student drops in wall/desk modes)
+  ic.addEventListener('dragover',e=>{
+    e.preventDefault();
+    for(const el of document.elementsFromPoint(e.clientX,e.clientY))
+      if(el!==ic&&el.id?.startsWith('desk-')){el.classList.add('drag-over');break;}
+  });
+  ic.addEventListener('dragleave',()=>document.querySelectorAll('.desk.drag-over').forEach(el=>el.classList.remove('drag-over')));
+  ic.addEventListener('drop',e=>{
+    e.preventDefault();
+    document.querySelectorAll('.desk.drag-over').forEach(el=>el.classList.remove('drag-over'));
+    for(const el of document.elementsFromPoint(e.clientX,e.clientY))
+      if(el!==ic&&el.id?.startsWith('desk-')){handleDropOnDesk(parseInt(el.id.split('-')[1]),e);return;}
+  });
+}
+
+window.addEventListener('mouseup',e=>{
+  if(wallDrawing){
+    wallDrawing=false; wallLastCell=null; wallAxis=null; wallAxisFixed=null;
+    clearPreview(); scheduleSave();
+  }
+  if(deskDrawing){
+    deskDrawing=false; deskDrawLastCell=null; deskDrawAxis=null;
+    icMouseDownInfo=null; clearPreview(); scheduleSave();
+  }
+  if(deskDragState){
+    const{deskId,origCol,origRow,gridRect,moved}=deskDragState;
+    deskDragState=null;
+    document.getElementById('drag-ghost').style.display='none';
+    document.getElementById(`desk-${deskId}`)?.classList.remove('desk-dragging');
+    clearPreview();
+    if(moved){
+      const col=Math.floor((e.clientX-gridRect.left)/CELL);
+      const row=Math.floor((e.clientY-gridRect.top)/CELL);
+      if(col>=0&&col<COLS&&row>=0&&row<ROWS){
+        const desk=desks.find(d=>d.id===deskId);
+        const other=desks.find(d=>d.id!==deskId&&d.col===col&&d.row===row);
+        if(other){other.col=origCol;other.row=origRow;}
+        if(desk){desk.col=col;desk.row=row;}
+      }
+      renderDesks(); updateStatus(); scheduleSave();
+    } else {
+      if(selectedDesks.has(deskId)) selectedDesks.delete(deskId); else selectedDesks.add(deskId);
+      renderDesks(); updateWidget();
+    }
+    icMouseDownInfo=null;
+  }
+  if(studentDeskDrag){
+    document.getElementById('drag-ghost').style.display='none';
+    const{deskId:fromId,studentId}=studentDeskDrag;
+    studentDeskDrag=null;
+    const fromEl=document.getElementById(`desk-${fromId}`);
+    if(fromEl) fromEl.style.opacity='';
+    const target=getDeskAtPoint(e.clientX,e.clientY);
+    if(target&&target.id!==fromId){
+      const fromDesk=desks.find(d=>d.id===fromId);
+      const swap=target.studentId;
+      fromDesk.studentId=swap||null;
+      target.studentId=studentId;
+    } else if(!target){
+      const fromDesk=desks.find(d=>d.id===fromId);
+      if(fromDesk) fromDesk.studentId=null;
+    }
+    renderDesks(); updateStatus(); scheduleSave();
+  }
+});
+
+window.addEventListener('mousemove',e=>{
+  if(studentDeskDrag){
+    const g=document.getElementById('drag-ghost');
+    g.style.left=e.clientX+'px'; g.style.top=e.clientY+'px';
+  }
+});
+
+window.addEventListener('mousedown',e=>{
+  if(mode!=='desk') return;
+  if(!e.target.closest('#classroom-grid')&&!e.target.closest('#selection-widget')){
+    selectedDesks.clear(); renderDesks(); hideWidget();
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// STUDENT DRAG FROM DESK
+// ══════════════════════════════════════════════════════════════════════
+function attachDeskLayerListeners() {
+  const layer=document.getElementById('desks-layer');
+  layer.addEventListener('mousedown',e=>{
+    if(mode!=='student') return;
+    const deskEl=e.target.closest('.desk'); if(!deskEl) return;
+    const deskId=parseInt(deskEl.id.split('-')[1]);
+    const desk=desks.find(d=>d.id===deskId);
+    if(desk?.studentId){
+      e.preventDefault();
+      studentDeskDrag={deskId,studentId:desk.studentId};
+      const st=students.find(s=>s.id===desk.studentId);
+      const g=document.getElementById('drag-ghost');
+      g.textContent=st?.name??''; g.style.display='block';
+      g.style.left=e.clientX+'px'; g.style.top=e.clientY+'px';
+      deskEl.style.opacity='0.5';
+    }
+  });
+}
+
+function attachStudentDropListeners() {
+  const scroll=document.getElementById('canvas-scroll');
+  scroll.addEventListener('dragover',e=>{
+    e.preventDefault();
+    document.querySelectorAll('.desk.drag-over').forEach(el=>el.classList.remove('drag-over'));
+    for(const el of document.elementsFromPoint(e.clientX,e.clientY))
+      if(el.id?.startsWith('desk-')){el.classList.add('drag-over');break;}
+  });
+  scroll.addEventListener('dragleave',e=>{
+    if(!e.currentTarget.contains(e.relatedTarget))
+      document.querySelectorAll('.desk.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  });
+  scroll.addEventListener('drop',e=>{
+    e.preventDefault();
+    document.querySelectorAll('.desk.drag-over').forEach(el=>el.classList.remove('drag-over'));
+    for(const el of document.elementsFromPoint(e.clientX,e.clientY))
+      if(el.id?.startsWith('desk-')){handleDropOnDesk(parseInt(el.id.split('-')[1]),e);return;}
+  });
+}
+
+function getDeskAtPoint(cx,cy){
+  for(const el of document.elementsFromPoint(cx,cy))
+    if(el.id?.startsWith('desk-')) return desks.find(d=>d.id===parseInt(el.id.split('-')[1]));
+  return null;
+}
+
+function handleDropOnDesk(deskId,e){
+  const studentId=parseInt(e.dataTransfer.getData('text/plain'));
+  if(!studentId) return;
+  const target=desks.find(d=>d.id===deskId); if(!target) return;
+  const prev=desks.find(d=>d.studentId===studentId);
+  const displaced=target.studentId;
+  if(prev) prev.studentId=displaced||null;
+  target.studentId=studentId;
+  renderDesks(); updateStatus(); scheduleSave();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// STUDENTS
+// ══════════════════════════════════════════════════════════════════════
+function addStudent(){
+  const inp=document.getElementById('student-name-input');
+  const name=inp.value.trim(); if(!name) return;
+  students.push({id:++studentCounter,name,color:getColor(studentCounter-1)});
+  inp.value=''; renderStudentList(); updateStatus(); scheduleSave();
+}
+function toggleBulkImport(){document.getElementById('bulk-import-area').classList.toggle('visible');}
+function bulkAddStudents(){
+  const names=document.getElementById('bulk-textarea').value.trim().split('\n').map(n=>n.trim()).filter(Boolean);
+  for(const name of names) students.push({id:++studentCounter,name,color:getColor(studentCounter-1)});
+  document.getElementById('bulk-textarea').value='';
+  toggleBulkImport(); renderStudentList(); updateStatus(); scheduleSave();
+}
+function removeStudent(id){
+  const desk=desks.find(d=>d.studentId===id); if(desk) desk.studentId=null;
+  students=students.filter(s=>s.id!==id);
+  renderDesks(); renderStudentList(); updateStatus(); scheduleSave();
+}
+
+function renderStudentList(){
+  const list=document.getElementById('student-list');
+  list.innerHTML='';
+  const seatedMap={};
+  for(const d of desks) if(d.studentId) seatedMap[d.studentId]=d.id;
+
+  for(const st of students){
+    const seatedDeskId=seatedMap[st.id], seated=!!seatedDeskId;
+    const canDrag = !seated && mode==='student';
+    const chip=document.createElement('div');
+    chip.className='student-chip'+(seated?' seated':canDrag?'':' no-drag');
+
+    const av=document.createElement('div');
+    av.className='s-avatar'; av.style.background=st.color;
+    av.textContent=initials(st.name); chip.appendChild(av);
+
+    const nm=document.createElement('span');
+    nm.className='s-name'; nm.textContent=st.name; chip.appendChild(nm);
+
+    if(seated){
+      const desk=desks.find(d=>d.id===seatedDeskId);
+      if(desk?.groupColor){
+        const dot=document.createElement('div');
+        dot.className='s-group-dot'; dot.style.background=desk.groupColor;
+        chip.appendChild(dot);
+      }
+    }
+
+    const del=document.createElement('span');
+    del.className='del-student'; del.innerHTML='×';
+    del.addEventListener('click',e=>{e.stopPropagation();removeStudent(st.id);});
+    chip.appendChild(del);
+
+    chip.draggable = canDrag;
+    if(canDrag){
+      chip.addEventListener('dragstart',e=>{
+        e.dataTransfer.setData('text/plain',String(st.id));
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setDragImage(document.getElementById('drag-img'),0,0);
+        chip.classList.add('dragging');
+        const g=document.getElementById('drag-ghost');
+        g.textContent=st.name; g.style.display='block';
+        g.style.left=e.clientX+'px'; g.style.top=e.clientY+'px';
+      });
+      chip.addEventListener('dragend',()=>{
+        chip.classList.remove('dragging');
+        document.getElementById('drag-ghost').style.display='none';
+      });
+    }
+    list.appendChild(chip);
+  }
+  document.getElementById('student-count').textContent=students.length;
+}
+
+document.addEventListener('dragover',e=>{
+  e.preventDefault();
+  const g=document.getElementById('drag-ghost');
+  if(g.style.display==='block'){g.style.left=e.clientX+'px';g.style.top=e.clientY+'px';}
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// CONTEXT MENU
+// ══════════════════════════════════════════════════════════════════════
+let ctxDeskId=null;
+function showCtxMenu(e,deskId){
+  ctxDeskId=deskId;
+  const menu=document.getElementById('ctx-menu');
+  const desk=desks.find(d=>d.id===deskId);
+  const student=desk?.studentId?students.find(s=>s.id===desk.studentId):null;
+  let html=`<div class="ctx-item" style="font-weight:500;color:var(--text-light);cursor:default">${t('ctxDesk')} #${deskId}</div><div class="ctx-sep"></div>`;
+  if(student) html+=`<div class="ctx-item" onclick="ctxUnassign()">${t('ctxRemove')} ${student.name.split(' ')[0]}</div>`;
+  html+=`<div class="ctx-item danger" onclick="ctxDelete()">${t('ctxDelete')}</div>`;
+  menu.innerHTML=html; menu.style.left=e.clientX+'px'; menu.style.top=e.clientY+'px';
+  menu.classList.add('visible');
+  setTimeout(()=>{window.addEventListener('click',closeCtx,{once:true});window.addEventListener('contextmenu',closeCtx,{once:true});},0);
+}
+function closeCtx(){document.getElementById('ctx-menu').classList.remove('visible');ctxDeskId=null;}
+function ctxUnassign(){const d=desks.find(x=>x.id===ctxDeskId);if(d)d.studentId=null;renderDesks();updateStatus();closeCtx();scheduleSave();}
+function ctxDelete(){removeDesk(ctxDeskId);closeCtx();}
+
+// ══════════════════════════════════════════════════════════════════════
+// MODE
+// ══════════════════════════════════════════════════════════════════════
+function setMode(m){
+  mode=m;
+  ['wall','desk','student'].forEach(x=>document.getElementById(`btn-${x}`).classList.toggle('active',m===x));
+  document.body.className=m+'-mode';
+  ic.style.pointerEvents=(m==='wall'||m==='desk')?'all':'none';
+  clearPreview();
+  if(m!=='desk'){selectedDesks.clear();hideWidget();}
+  renderDesks();
+  const hints={wall:t('hintWall'),desk:t('hintDesk'),student:t('hintStudent')};
+  document.getElementById('status-hint').textContent=hints[m]||'';
+  const modeKeys={wall:t('modeWallUpper'),desk:t('modeDeskUpper'),student:t('modeStudentUpper')};
+  document.getElementById('status-mode').textContent=modeKeys[m]||m.toUpperCase();
+  scheduleSave();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// STATUS / EXPORT / IMPORT
+// ══════════════════════════════════════════════════════════════════════
+function updateStatus(){
+  document.getElementById('status-desks').textContent=desks.length;
+  document.getElementById('status-seated').textContent=desks.filter(d=>d.studentId).length;
+  document.getElementById('student-count').textContent=students.length;
+}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify({version:1,grid:{cols:COLS,rows:ROWS},walls:[...walls],desks,students},null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='classroom.json'; a.click();
+}
+function importJSON(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      COLS=data.grid?.cols||20; ROWS=data.grid?.rows||15;
+      document.getElementById('grid-cols').value=COLS;
+      document.getElementById('grid-rows').value=ROWS;
+      walls=new Set(data.walls||[]);
+      desks=(data.desks||[]).map(d=>({...d,groupColor:d.groupColor||null}));
+      students=data.students||[];
+      deskCounter=desks.length?Math.max(...desks.map(d=>d.id)):0;
+      studentCounter=students.length?Math.max(...students.map(s=>s.id)):0;
+      selectedDesks.clear();
+      setupGrid(); renderDesks(); updateStatus(); hideWidget(); scheduleSave();
+    }catch(err){alert('Import failed: '+err.message);}
+  };
+  reader.readAsText(file); e.target.value='';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// KEYBOARD
+// ══════════════════════════════════════════════════════════════════════
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key==='w'||e.key==='W') setMode('wall');
+  if(e.key==='d'||e.key==='D') setMode('desk');
+  if(e.key==='s'||e.key==='S') setMode('student');
+  if(e.key==='Escape'&&mode==='desk'){selectedDesks.clear();renderDesks();hideWidget();}
+  if(e.key==='Delete'&&selectedDesks.size>0&&mode==='desk') deleteSelectedDesks();
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════
+const savedMode = loadState();
+setupGrid();
+setupInteractionLayer();
+attachDeskLayerListeners();
+attachStudentDropListeners();
+buildWidget();
+applyTranslations();
+renderDesks();
+updateStatus();
+setMode(savedMode || 'desk');
+</script>
+</body>
+</html>
