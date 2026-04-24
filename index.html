@@ -37,8 +37,10 @@ header{background:var(--panel);color:#fff;padding:8px 16px;display:flex;align-it
 .left-panel{width:210px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
 .panel-header{padding:8px 12px 6px;border-bottom:1px solid var(--border);font-size:.62rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--text-light);display:flex;align-items:center;justify-content:space-between;gap:6px;}
 .panel-header .count{background:var(--accent);color:#fff;border-radius:10px;padding:1px 6px;font-size:.58rem;}
+.sort-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--border);background:var(--bg);}
+.sort-label{font-size:.6rem;color:var(--text-light);white-space:nowrap;letter-spacing:.03em;}
 .sort-btns{display:flex;gap:3px;}
-.sort-btn{padding:1px 6px;border:1px solid var(--border);border-radius:3px;font-family:'DM Mono',monospace;font-size:.55rem;cursor:pointer;background:transparent;color:var(--text-light);transition:all .1s;}
+.sort-btn{padding:2px 7px;border:1px solid var(--border);border-radius:3px;font-family:'DM Mono',monospace;font-size:.6rem;cursor:pointer;background:transparent;color:var(--text-light);transition:all .1s;}
 .sort-btn.active,.sort-btn:hover{border-color:var(--accent2);color:var(--accent2);background:#f0fcfb;}
 .student-input-wrap{padding:6px 8px;border-bottom:1px solid var(--border);display:flex;gap:4px;}
 .student-input{flex:1;padding:4px 7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Mono',monospace;font-size:.68rem;background:var(--bg);color:var(--text);outline:none;}
@@ -54,7 +56,7 @@ header{background:var(--panel);color:#fff;padding:8px 16px;display:flex;align-it
 .student-chip .s-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .student-chip .s-group-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;border:1px solid rgba(0,0,0,.15);}
 .student-chip .del-student{opacity:0;cursor:pointer;color:#e05252;font-size:.8rem;line-height:1;transition:opacity .1s;flex-shrink:0;}
-.student-chip:hover .del-student{opacity:1;}
+body.student-mode .student-chip:hover .del-student{opacity:1;}
 .student-chip.no-drag{cursor:not-allowed;opacity:.55;}
 .student-chip.no-drag:hover{border-color:var(--border);background:var(--bg);}
 #student-mode-hint{padding:4px 8px;font-size:.58rem;color:var(--text-light);background:#fdf8f0;border-bottom:1px solid var(--border);text-align:center;display:none;}
@@ -267,10 +269,6 @@ body.object-mode .canvas-scroll{cursor:cell;}
     <div class="panel-header">
       <span data-i18n="panelStudents"></span>
       <span class="count" id="student-count">0</span>
-      <div class="sort-btns">
-        <button class="sort-btn active" id="sort-name" onclick="setSort('name')" data-i18n="sortName"></button>
-        <button class="sort-btn" id="sort-group" onclick="setSort('group')" data-i18n="sortGroup"></button>
-      </div>
     </div>
     <div class="student-input-wrap">
       <input class="student-input" id="student-name-input" data-i18n-placeholder="namePlaceholder" onkeydown="if(event.key==='Enter')addStudent()">
@@ -284,6 +282,14 @@ body.object-mode .canvas-scroll{cursor:cell;}
       <div class="bulk-actions">
         <button onclick="bulkAddStudents()" data-i18n="bulkAddAll"></button>
         <button onclick="toggleBulkImport()" data-i18n="cancel"></button>
+      </div>
+    </div>
+
+    <div class="sort-row">
+      <span class="sort-label" data-i18n="sortBy"></span>
+      <div class="sort-btns">
+        <button class="sort-btn active" id="sort-name" onclick="setSort('name')" data-i18n="sortName"></button>
+        <button class="sort-btn" id="sort-group" onclick="setSort('group')" data-i18n="sortGroup"></button>
       </div>
     </div>
 
@@ -357,6 +363,7 @@ const STRINGS = {
     bulkAdd:'Legg til flere (én per linje)',
     bulkPlaceholder:'Ola\nKari\nPer\n…',
     bulkAddAll:'Legg til alle', cancel:'Avbryt', ok:'OK',
+    sortBy:'Sorter etter:',
     sortName:'Navn', sortGroup:'Gruppe',
     swDesksSelected:'pult(er) valgt',
     swClearColor:'✕ Farge', swDeselect:'⊡ Fjern valg', swDelete:'⌫ Slett',
@@ -395,6 +402,7 @@ const STRINGS = {
     bulkAdd:'Bulk add (one per line)',
     bulkPlaceholder:'Alice\nBob\nCharlie\n…',
     bulkAddAll:'Add All', cancel:'Cancel', ok:'OK',
+    sortBy:'Sort by:',
     sortName:'Name', sortGroup:'Group',
     swDesksSelected:'desk(s) selected',
     swClearColor:'✕ Color', swDeselect:'⊡ Deselect', swDelete:'⌫ Delete',
@@ -459,6 +467,10 @@ let deskCounter=0,studentCounter=0,objCounter=0;
 let selectedDesks=new Set();
 let sortMode='name';
 let selectedObjType=null;
+// Palette drag state (mousedown-drag-mouseup to place objects)
+let paletteDragType=null;
+let paletteDragActive=false;
+let paletteDragStartX=0,paletteDragStartY=0;
 
 let deskDrawing=false,deskDrawStartCol=0,deskDrawStartRow=0,deskDrawAxis=null,deskDrawLastCell=null;
 let deskDragState=null;
@@ -559,7 +571,7 @@ function setupGrid(){
 function drawGridBg(){
   const c=document.getElementById('grid-bg-canvas'),ctx=c.getContext('2d');
   ctx.fillStyle='#f5f0e8'; ctx.fillRect(0,0,c.width,c.height);
-  ctx.strokeStyle='#ddd8cc'; ctx.lineWidth=0.5;
+  ctx.strokeStyle='#c8c2b4'; ctx.lineWidth=0.8;
   for(let i=0;i<=COLS;i++){ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,c.height);ctx.stroke();}
   for(let i=0;i<=ROWS;i++){ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(c.width,i*CELL);ctx.stroke();}
 }
@@ -581,10 +593,20 @@ function renderWalls(){
   ctx.clearRect(0,0,c.width,c.height);
   ctx.strokeStyle='#1a1a2e';ctx.lineWidth=3;ctx.lineCap='square';
   for(const key of walls){
-    const[tp,r,col]=key.split(':');
+    const[tp,rs,cs]=key.split(':');
+    const r=+rs,col=+cs;
     ctx.beginPath();
-    if(tp==='h'){ctx.moveTo(+col*CELL,(+r+1)*CELL);ctx.lineTo((+col+1)*CELL,(+r+1)*CELL);}
-    else{ctx.moveTo((+col+1)*CELL,+r*CELL);ctx.lineTo((+col+1)*CELL,(+r+1)*CELL);}
+    if(tp==='h'){
+      // h:r:c draws horizontal line at y=(r+1)*CELL — r=-1 draws at y=0 (top edge)
+      const y=(r+1)*CELL;
+      if(y<0||y>c.height)continue;
+      ctx.moveTo(col*CELL,y);ctx.lineTo((col+1)*CELL,y);
+    }else{
+      // v:r:c draws vertical line at x=(col+1)*CELL — col=-1 draws at x=0 (left edge)
+      const x=(col+1)*CELL;
+      if(x<0||x>c.width)continue;
+      ctx.moveTo(x,r*CELL);ctx.lineTo(x,(r+1)*CELL);
+    }
     ctx.stroke();
   }
 }
@@ -595,13 +617,20 @@ function getSnapEdge(e){
   const col=Math.round(x/CELL),row=Math.round(y/CELL);
   const nearH=Math.abs(y-row*CELL),nearV=Math.abs(x-col*CELL);
   if(nearH<nearV){
-    if(row<=0||row>=ROWS)return null;
+    // Horizontal wall: row 0 = top edge, row ROWS = bottom edge — all allowed
+    if(row<0||row>ROWS)return null;
     const c=Math.floor(x/CELL);
-    return(c<0||c>=COLS)?null:{key:`h:${row-1}:${c}`,axis:'h',row:row-1,col:c};
+    if(c<0||c>=COLS)return null;
+    // key uses row-1 internally: row 0 maps to h:-1:c, but we need h:0:c for top edge
+    // Store as h:row:c meaning "top edge of row row" (i.e. between row-1 and row)
+    // For row=0 this is the very top outer edge
+    return{key:`h:${row-1}:${c}`,axis:'h',row:row-1,col:c};
   }else{
-    if(col<=0||col>=COLS)return null;
+    // Vertical wall: col 0 = left edge, col COLS = right edge — all allowed
+    if(col<0||col>COLS)return null;
     const r=Math.floor(y/CELL);
-    return(r<0||r>=ROWS)?null:{key:`v:${r}:${col-1}`,axis:'v',row:r,col:col-1};
+    if(r<0||r>=ROWS)return null;
+    return{key:`v:${r}:${col-1}`,axis:'v',row:r,col:col-1};
   }
 }
 
@@ -867,13 +896,16 @@ function buildObjPalette(){
   types.forEach(type=>{
     const tile=document.createElement('div');
     tile.className='obj-tile'+(selectedObjType===type?' active':'');
-    tile.onclick=()=>{
-      selectedObjType=selectedObjType===type?null:type;
-      buildObjPalette();
-      // Update IC: let clicks through to objects when nothing selected
-      if(ic) ic.style.pointerEvents=selectedObjType?'all':'none';
-      if(!selectedObjType) clearPreview();
-    };
+    tile.addEventListener('mousedown',e=>{
+      if(e.button!==0)return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Start a palette drag
+      paletteDragType=type;
+      paletteDragActive=false; // becomes true once mouse moves enough
+      paletteDragStartX=e.clientX;
+      paletteDragStartY=e.clientY;
+    });
     if(type==='label'){
       const icon=document.createElement('div');
       icon.className='obj-label-icon';icon.textContent='A';
@@ -988,14 +1020,8 @@ function setupInteractionLayer(){
       }
     }
     if(mode==='object'){
-      if(!selectedObjType)return;
-      const cell=getCellXY(e);if(!cell)return;
-      addRoomObj(selectedObjType,cell.col,cell.row);
-      // Deselect after placing so user must re-select to place another
-      selectedObjType=null;
-      buildObjPalette();
-      clearPreview();
-      ic.style.pointerEvents='none';
+      // Placement is done via palette drag (mousedown→mousemove→mouseup)
+      // IC mousedown in object mode: nothing to do (objects handle their own mousedown)
     }
   });
 
@@ -1062,7 +1088,9 @@ function setupInteractionLayer(){
     for(const el of document.elementsFromPoint(e.clientX,e.clientY))
       if(el!==ic&&el.id?.startsWith('desk-')){el.classList.add('drag-over');break;}
   });
-  ic.addEventListener('dragleave',()=>document.querySelectorAll('.desk.drag-over').forEach(el=>el.classList.remove('drag-over')));
+  ic.addEventListener('dragleave',()=>{
+    document.querySelectorAll('.desk.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  });
   ic.addEventListener('drop',e=>{
     e.preventDefault();
     document.querySelectorAll('.desk.drag-over').forEach(el=>el.classList.remove('drag-over'));
@@ -1072,6 +1100,22 @@ function setupInteractionLayer(){
 }
 
 window.addEventListener('mouseup',e=>{
+  // Palette drag: place object on release over grid
+  if(paletteDragType){
+    const type=paletteDragType;
+    paletteDragType=null;
+    paletteDragActive=false;
+    document.getElementById('drag-ghost').style.display='none';
+    clearPreview();
+    const gr=document.getElementById('classroom-grid').getBoundingClientRect();
+    const col=Math.floor((e.clientX-gr.left)/CELL);
+    const row=Math.floor((e.clientY-gr.top)/CELL);
+    if(col>=0&&col<COLS&&row>=0&&row<ROWS){
+      addRoomObj(type,col,row);
+    }
+    // Don't set selectedObjType — pure drag-to-place, no selection state
+    return;
+  }
   if(wallDrawing){wallDrawing=false;wallLastCell=null;wallAxis=null;wallAxisFixed=null;clearPreview();scheduleSave();}
   if(deskDrawing){deskDrawing=false;deskDrawLastCell=null;deskDrawAxis=null;icMouseDownInfo=null;clearPreview();scheduleSave();}
   if(deskDragState){
@@ -1143,6 +1187,36 @@ window.addEventListener('mouseup',e=>{
 });
 
 window.addEventListener('mousemove',e=>{
+  // Palette drag: move from widget to grid
+  if(paletteDragType){
+    const dx=e.clientX-paletteDragStartX,dy=e.clientY-paletteDragStartY;
+    if(!paletteDragActive&&(Math.abs(dx)>4||Math.abs(dy)>4)){
+      paletteDragActive=true;
+      const g=document.getElementById('drag-ghost');
+      g.textContent=t('obj'+paletteDragType.charAt(0).toUpperCase()+paletteDragType.slice(1));
+      g.style.display='block';
+    }
+    if(paletteDragActive){
+      const g=document.getElementById('drag-ghost');
+      g.style.left=e.clientX+'px';g.style.top=e.clientY+'px';
+      // Show preview on grid
+      const gr=document.getElementById('classroom-grid').getBoundingClientRect();
+      const col=Math.floor((e.clientX-gr.left)/CELL);
+      const row=Math.floor((e.clientY-gr.top)/CELL);
+      if(col>=0&&col<COLS&&row>=0&&row<ROWS){
+        const[cw,rh]=OBJ_SIZES[paletteDragType]||[1,1];
+        const ctx=ic.getContext('2d');
+        ctx.clearRect(0,0,ic.width,ic.height);
+        ctx.fillStyle='rgba(155,89,182,.25)';
+        ctx.strokeStyle='rgba(155,89,182,.8)';
+        ctx.lineWidth=2;ctx.beginPath();
+        ctx.roundRect(col*CELL+2,row*CELL+2,cw*CELL-4,rh*CELL-4,4);
+        ctx.fill();ctx.stroke();
+      }else{
+        clearPreview();
+      }
+    }
+  }
   if(studentDeskDrag){
     const g=document.getElementById('drag-ghost');
     g.style.left=e.clientX+'px';g.style.top=e.clientY+'px';
@@ -1447,7 +1521,7 @@ async function renderClassroomToCanvas(scale=2){
   // Background
   ctx.fillStyle='#f5f0e8';ctx.fillRect(0,0,W/scale,H/scale);
   // Grid
-  ctx.strokeStyle='#ddd8cc';ctx.lineWidth=0.5;
+  ctx.strokeStyle='#c8c2b4';ctx.lineWidth=0.8;
   for(let c=minC;c<=maxC+1;c++){ctx.beginPath();ctx.moveTo((c-minC)*CELL,0);ctx.lineTo((c-minC)*CELL,usedRows*CELL);ctx.stroke();}
   for(let r=minR;r<=maxR+1;r++){ctx.beginPath();ctx.moveTo(0,(r-minR)*CELL);ctx.lineTo(usedCols*CELL,(r-minR)*CELL);ctx.stroke();}
   // Walls
