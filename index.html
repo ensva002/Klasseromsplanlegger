@@ -6,6 +6,7 @@
 <title>Klasseromsplanlegger</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+html{font-size:18px;}
 :root{
   --bg:#f5f0e8;--surface:#fffef9;--panel:#1a1a2e;--panel-light:#242440;
   --accent:#e86b3e;--accent2:#4ecdc4;--text:#1a1a2e;--text-light:#6b6b8a;
@@ -115,6 +116,10 @@ body.student-mode #student-mode-hint{display:none;}
 /* CANVAS */
 .canvas-area{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .canvas-scroll{flex:1;overflow:auto;background:var(--bg);}
+.zoom-btn{width:24px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#ccc;font-size:.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;line-height:1;padding:0;}
+.zoom-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+.zoom-btn:disabled{opacity:.3;cursor:default;}
+.zoom-pct{font-size:.65rem;color:#aaa;min-width:36px;text-align:center;letter-spacing:.03em;}
 #classroom-grid{position:relative;margin:20px;display:inline-block;}
 #desks-layer{position:absolute;top:0;left:0;z-index:2;pointer-events:auto;}
 #objects-layer{position:absolute;top:0;left:0;z-index:3;pointer-events:none;}
@@ -124,6 +129,7 @@ body.student-mode #student-mode-hint{display:none;}
 .desk.occupied{background:var(--desk-occupied);border-color:#6ecfc9;}
 .desk.drag-over{border-color:var(--accent)!important;box-shadow:0 0 0 3px rgba(232,107,62,.3)!important;}
 .desk.selected{box-shadow:0 0 0 3px rgba(78,205,196,.7),0 2px 8px rgba(0,0,0,.15)!important;border-color:var(--accent2)!important;}
+.desk.hovered-from-list{box-shadow:0 0 0 3px rgba(232,107,62,.55),0 2px 10px rgba(232,107,62,.2)!important;border-color:var(--accent)!important;z-index:5;}
 .desk.desk-dragging{opacity:.3;}
 .desk .desk-avatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:600;color:#fff;margin-bottom:1px;flex-shrink:0;}
 .desk .desk-student{font-size:.55rem;font-weight:500;text-align:center;line-height:1.2;padding:0 2px;word-break:break-word;}
@@ -217,7 +223,7 @@ body.object-mode .canvas-scroll{cursor:cell;}
 .popup-close:hover{color:var(--text);}
 
 /* ── GLOBAL FONT SIZE BUMP ── */
-.mode-btn{font-size:.75rem !important;}
+.mode-btn{font-size:.78rem !important;}
 .student-chip{font-size:.73rem !important;}
 .panel-header{font-size:.68rem !important;}
 .sort-btn{font-size:.6rem !important;}
@@ -338,8 +344,16 @@ body.object-mode .canvas-scroll{cursor:cell;}
         <div id="objects-layer"></div>
         <canvas id="interaction-layer"></canvas>
       </div>
+
     </div>
-    <div class="status-bar"><span id="status-hint"></span></div>
+    <div class="status-bar" style="display:flex;align-items:center;justify-content:space-between;">
+      <span id="status-hint"></span>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        <button class="zoom-btn" id="zoom-out" onclick="zoomGrid(-1)" title="−">−</button>
+        <span class="zoom-pct" id="zoom-pct">100%</span>
+        <button class="zoom-btn" id="zoom-in" onclick="zoomGrid(1)" title="+">+</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -383,7 +397,7 @@ const STRINGS = {
     sortName:'Navn', sortGroup:'Gruppe',
     swDesksSelected:'pult(er) valgt',
     swClearColor:'✕ Farge', swDeselect:'⊡ Fjern valg', swDelete:'⌫ Slett',
-    owTitle:'Romobj ekter',
+    owTitle:'Romobjekter',
     owDropToRemove:'Dra hit for å fjerne',
     objDoor:'Dør', objBoard:'Tavle', objPodium:'Kateter', objPodium_small:'Kateter', objLabel:'Etikett',
     studentModeHint:'⇄ Bytt til Elever for å dra',
@@ -474,7 +488,8 @@ function toggleLang(){lang=lang==='no'?'en':'no';applyTranslations();scheduleSav
 // ══════════════════════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════════════════════
-const CELL=48;
+let CELL=48;
+const CELL_MIN=24,CELL_MAX=80,CELL_STEP=8;
 let COLS=20,ROWS=15;
 let mode='desk';
 let walls=new Set();
@@ -505,10 +520,10 @@ let editingLabelId=null;
 // SVG DATA
 // ══════════════════════════════════════════════════════════════════════
 const OBJ_SVGS={
-  door:'assets/door.svg',
-  board:'assets/board.svg',
-  podium:'assets/podium.svg',
-  podium_small:'assets/podium_small.svg',
+  door:'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcKICAgdmlld0JveD0iMCAwIDQ0IDQ0IgogICB2ZXJzaW9uPSIxLjEiCiAgIGlkPSJzdmcyIgogICBzb2RpcG9kaTpkb2NuYW1lPSJkb29yLnN2ZyIKICAgaW5rc2NhcGU6dmVyc2lvbj0iMS40LjMgKDBkMTVmNzUwNDIsIDIwMjUtMTItMjUpIgogICB4bWxuczppbmtzY2FwZT0iaHR0cDovL3d3dy5pbmtzY2FwZS5vcmcvbmFtZXNwYWNlcy9pbmtzY2FwZSIKICAgeG1sbnM6c29kaXBvZGk9Imh0dHA6Ly9zb2RpcG9kaS5zb3VyY2Vmb3JnZS5uZXQvRFREL3NvZGlwb2RpLTAuZHRkIgogICB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciCiAgIHhtbG5zOnN2Zz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxkZWZzCiAgICAgaWQ9ImRlZnMyIiAvPgogIDxzb2RpcG9kaTpuYW1lZHZpZXcKICAgICBpZD0ibmFtZWR2aWV3MiIKICAgICBwYWdlY29sb3I9IiNmZmZmZmYiCiAgICAgYm9yZGVyY29sb3I9IiMwMDAwMDAiCiAgICAgYm9yZGVyb3BhY2l0eT0iMC4yNSIKICAgICBpbmtzY2FwZTpzaG93cGFnZXNoYWRvdz0iMiIKICAgICBpbmtzY2FwZTpwYWdlb3BhY2l0eT0iMC4wIgogICAgIGlua3NjYXBlOnBhZ2VjaGVja2VyYm9hcmQ9IjAiCiAgICAgaW5rc2NhcGU6ZGVza2NvbG9yPSIjZDFkMWQxIgogICAgIGlua3NjYXBlOnpvb209IjkuMDM2NjE5IgogICAgIGlua3NjYXBlOmN4PSI4Ljk2MzUyOTQiCiAgICAgaW5rc2NhcGU6Y3k9IjI0LjIzNDcyOCIKICAgICBpbmtzY2FwZTp3aW5kb3ctd2lkdGg9IjE0NDAiCiAgICAgaW5rc2NhcGU6d2luZG93LWhlaWdodD0iODQyIgogICAgIGlua3NjYXBlOndpbmRvdy14PSIwIgogICAgIGlua3NjYXBlOndpbmRvdy15PSIyNiIKICAgICBpbmtzY2FwZTp3aW5kb3ctbWF4aW1pemVkPSIxIgogICAgIGlua3NjYXBlOmN1cnJlbnQtbGF5ZXI9InN2ZzIiIC8+CiAgPHBhdGgKICAgICBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojNjY2NjY2O3N0cm9rZS13aWR0aDoyLjE7c3Ryb2tlLWxpbmVqb2luOnJvdW5kO3N0cm9rZS1taXRlcmxpbWl0OjYuMztzdHJva2UtZGFzaGFycmF5OjIuMDk5OTk5OSw0LjE5OTk5OTgxO3N0cm9rZS1kYXNob2Zmc2V0OjIuMDk5OTk5OTtwYWludC1vcmRlcjpub3JtYWw7c3Ryb2tlLWxpbmVjYXA6cm91bmQiCiAgICAgZD0iTSAwLjg4Mjk0Myw0Mi44MjI3NDIgQyAyNC43OTU5ODUsNDIuNzQ5MTY0IDQyLjg5NjMxOSwyNy4yMjQwOCA0Mi44OTYzMTksMS4xNzcyNTc1IgogICAgIGlkPSJwYXRoMiIKICAgICBzb2RpcG9kaTpub2RldHlwZXM9ImNjIiAvPgogIDxwYXRoCiAgICAgaWQ9InJlY3QxIgogICAgIHN0eWxlPSJiYXNlbGluZS1zaGlmdDpiYXNlbGluZTtkaXNwbGF5OmlubGluZTtvdmVyZmxvdzp2aXNpYmxlO29wYWNpdHk6MTt2ZWN0b3ItZWZmZWN0Om5vbmU7ZmlsbDojMjgxNzBiO3N0cm9rZS13aWR0aDowLjk4OTI5NztzdHJva2UtbWl0ZXJsaW1pdDo2LjM7ZW5hYmxlLWJhY2tncm91bmQ6YWNjdW11bGF0ZTtzdG9wLWNvbG9yOiMwMDAwMDA7c3RvcC1vcGFjaXR5OjEiCiAgICAgZD0iTSAtMC4yMzI0MjE4OCwtMC4yMzI0MjE4OCBWIDQzLjkzODA3NSBIIDIuNDc0OTM4OCBWIDIuMzk3MDczMiBIIDQ0LjAxMTY1NCB2IC0yLjYyOTQ5NTA4IHoiIC8+Cjwvc3ZnPg==',
+  board:'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5MiA0NCI+CiAgPHJlY3QgeD0iMiIgeT0iNiIgd2lkdGg9Ijg4IiBoZWlnaHQ9IjMwIiByeD0iMiIgZmlsbD0iI2Y4ZjhmNCIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSI2IiB5PSIxMCIgd2lkdGg9IjgwIiBoZWlnaHQ9IjIyIiByeD0iMSIgZmlsbD0id2hpdGUiIHN0cm9rZT0iI2NjYyIgc3Ryb2tlLXdpZHRoPSIxIi8+CiAgPGxpbmUgeDE9IjE0IiB5MT0iMTgiIHgyPSI1OCIgeTI9IjE4IiBzdHJva2U9IiNiYmIiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMTQiIHkxPSIyNCIgeDI9IjQyIiB5Mj0iMjQiIHN0cm9rZT0iI2JiYiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxyZWN0IHg9IjMyIiB5PSIzNCIgd2lkdGg9IjI4IiBoZWlnaHQ9IjQiIHJ4PSIxIiBmaWxsPSIjOTk5Ii8+Cjwvc3ZnPg==',
+  podium:'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5MiA0NCI+CiAgPHJlY3QgeD0iMiIgeT0iNiIgd2lkdGg9Ijg4IiBoZWlnaHQ9IjMyIiByeD0iMyIgZmlsbD0iI2Q0YzVhOSIgc3Ryb2tlPSIjN2E2YTUwIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSI4IiB5PSIxMCIgd2lkdGg9IjM4IiBoZWlnaHQ9IjIyIiByeD0iMiIgZmlsbD0iI2M0YjA5MCIgc3Ryb2tlPSIjN2E2YTUwIiBzdHJva2Utd2lkdGg9IjEiLz4KICA8cmVjdCB4PSI1NCIgeT0iMTMiIHdpZHRoPSIyOCIgaGVpZ2h0PSI5IiByeD0iMSIgZmlsbD0iI2I4YTA3YSIgc3Ryb2tlPSIjN2E2YTUwIiBzdHJva2Utd2lkdGg9IjEiLz4KICA8Y2lyY2xlIGN4PSI2MCIgY3k9IjI4IiByPSIzIiBmaWxsPSJub25lIiBzdHJva2U9IiM3YTZhNTAiIHN0cm9rZS13aWR0aD0iMS41Ii8+Cjwvc3ZnPg==',
+  podium_small:'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NCA0NCI+CiAgPHJlY3QgeD0iMyIgeT0iNSIgd2lkdGg9IjM4IiBoZWlnaHQ9IjM0IiByeD0iMyIgZmlsbD0iI2Q0YzVhOSIgc3Ryb2tlPSIjN2E2YTUwIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSI3IiB5PSI5IiB3aWR0aD0iMzAiIGhlaWdodD0iMTgiIHJ4PSIyIiBmaWxsPSIjYzRiMDkwIiBzdHJva2U9IiM3YTZhNTAiIHN0cm9rZS13aWR0aD0iMSIvPgogIDxjaXJjbGUgY3g9IjIyIiBjeT0iMzMiIHI9IjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzdhNmE1MCIgc3Ryb2tlLXdpZHRoPSIxLjUiLz4KPC9zdmc+',
 };
 // Object sizes in cells (col-span, row-span) at rotation 0
 const OBJ_SIZES={
@@ -572,7 +587,7 @@ function darkenColor(hex,amount){
 function isColorDark(hex){
   if(!hex||!hex.startsWith('#'))return false;
   const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return(0.299*r+0.587*g+0.114*b)<160;
+  return(0.299*r+0.587*g+0.114*b)<175;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -752,13 +767,45 @@ function renderDesks(){
     else{el.style.background='';el.style.borderColor='';}
     const student=desk.studentId?students.find(s=>s.id===desk.studentId):null;
     if(student){
-      const av=document.createElement('div');
-      av.className='desk-avatar';av.style.background=student.color;
-      av.textContent=initials(student.name);el.appendChild(av);
-      const nm=document.createElement('div');
-      nm.className='desk-student';
-      if(gc)nm.style.color=isColorDark(gc)?'#fff':'#1a1a2e';
-      nm.textContent=student.name.split(' ')[0];el.appendChild(nm);
+      // Render name the same way as the export: fit text to desk width
+      const textColor=gc?(isColorDark(gc)?'#fff':'#1a1a2e'):'#1a1a2e';
+      const parts=student.name.split(' ');
+      const firstName=parts[0];
+      const pad=4;
+      const maxW=CELL-4-pad*2; // desk width minus border minus padding
+      // We'll use a canvas to measure and fit, then set via a sized div
+      const tmpC=document.createElement('canvas');
+      const tmpCtx=tmpC.getContext('2d');
+      function fitFontSize(text,maxSize){
+        let sz=maxSize;
+        while(sz>7){
+          tmpCtx.font=`bold ${sz}px Arial,sans-serif`;
+          if(tmpCtx.measureText(text).width<=maxW)break;
+          sz--;
+        }
+        return sz;
+      }
+      el.style.flexDirection='column';
+      el.style.gap='1px';
+      if(parts.length===1){
+        const sz=fitFontSize(firstName,Math.round(CELL*0.28));
+        const line=document.createElement('div');
+        line.style.cssText=`font-family:Arial,sans-serif;font-weight:bold;font-size:${sz}px;color:${textColor};text-align:center;line-height:1.1;padding:0 ${pad}px;white-space:nowrap;`;
+        line.textContent=firstName;
+        el.appendChild(line);
+      }else{
+        const sz1=fitFontSize(firstName,Math.round(CELL*0.26));
+        const line1=document.createElement('div');
+        line1.style.cssText=`font-family:Arial,sans-serif;font-weight:bold;font-size:${sz1}px;color:${textColor};text-align:center;line-height:1.1;padding:0 ${pad}px;white-space:nowrap;`;
+        line1.textContent=firstName;
+        el.appendChild(line1);
+        const lastParts=parts.slice(1).map(p=>p[0]).join(' ');
+        const sz2=fitFontSize(lastParts,Math.round(CELL*0.26));
+        const line2=document.createElement('div');
+        line2.style.cssText=`font-family:Arial,sans-serif;font-weight:bold;font-size:${sz2}px;color:${textColor};text-align:center;line-height:1.1;padding:0 ${pad}px;white-space:nowrap;`;
+        line2.textContent=lastParts;
+        el.appendChild(line2);
+      }
     }
     el.addEventListener('contextmenu',e=>{e.preventDefault();showCtxMenu(e,desk.id);});
     el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drag-over');});
@@ -840,21 +887,20 @@ function renderRoomObjs(){
       el.style.fontSize=Math.max(8,Math.floor(maxDim*0.22))+'px';
       el.textContent=obj.text||'?';
     }else{
-      el.style.background=sty[0];
-      el.style.border=`2px solid ${sty[1]}`;
       el.style.borderRadius='4px';
-      el.style.flexDirection='column';
-      el.style.gap='2px';
-      // Icon row
-      const icon=document.createElement('div');
-      icon.style.cssText=`font-size:${Math.min(pw,ph)*0.38}px;line-height:1;color:${sty[1]};`;
-      icon.textContent=sty[3];
-      el.appendChild(icon);
-      // Label row
-      const lbl=document.createElement('div');
-      lbl.style.cssText=`font-size:${Math.min(pw*0.18,9)}px;color:${sty[2]};text-align:center;line-height:1.1;padding:0 2px;`;
-      lbl.textContent=t('obj'+obj.type.charAt(0).toUpperCase()+obj.type.slice(1));
-      el.appendChild(lbl);
+      el.style.overflow='hidden';
+      el.style.background='transparent';
+      el.style.border='none';
+      const img=document.createElement('img');
+      img.src=OBJ_SVGS[obj.type]||'';
+      img.draggable=false;
+      img.style.pointerEvents='none';
+      if(obj.rotation===0||obj.rotation===180){
+        img.style.cssText=`width:100%;height:100%;object-fit:fill;transform:rotate(${obj.rotation}deg);display:block;`;
+      }else{
+        img.style.cssText=`width:${ph}px;height:${pw}px;object-fit:fill;transform:rotate(${obj.rotation}deg);display:block;`;
+      }
+      el.appendChild(img);
 
     }
 
@@ -1405,6 +1451,16 @@ function renderStudentList(){
     const canDrag=!seated&&mode==='student';
     const chip=document.createElement('div');
     chip.className='student-chip'+(seated?' seated':canDrag?'':' no-drag');
+    if(seated){
+      chip.addEventListener('mouseenter',()=>{
+        const deskEl=document.getElementById(`desk-${seatedDeskId}`);
+        if(deskEl)deskEl.classList.add('hovered-from-list');
+      });
+      chip.addEventListener('mouseleave',()=>{
+        const deskEl=document.getElementById(`desk-${seatedDeskId}`);
+        if(deskEl)deskEl.classList.remove('hovered-from-list');
+      });
+    }
     const av=document.createElement('div');
     av.className='s-avatar';av.style.background=st.color;
     av.textContent=initials(st.name);chip.appendChild(av);
@@ -1546,127 +1602,124 @@ function getUsedBounds(){
   return{minC:Math.max(0,minC-1),maxC:Math.min(COLS-1,maxC+1),minR:Math.max(0,minR-1),maxR:Math.min(ROWS-1,maxR+1)};
 }
 
-async function renderClassroomToCanvas(scale=2){
+async function renderClassroomToCanvas(scale=4){
+  // scale=4 means each grid cell is CELL*4 pixels — no ctx.scale(), everything is explicit
+  const S=scale;
+  const C=CELL*S; // scaled cell size in canvas pixels
   const{minC,maxC,minR,maxR}=getUsedBounds();
   const usedCols=maxC-minC+1,usedRows=maxR-minR+1;
-  const W=usedCols*CELL*scale,H=usedRows*CELL*scale;
+  const W=usedCols*C,H=usedRows*C;
   const canvas=document.createElement('canvas');
   canvas.width=W;canvas.height=H;
   const ctx=canvas.getContext('2d');
-  ctx.scale(scale,scale);
-  const offX=-minC*CELL,offY=-minR*CELL;
 
   // Background
-  ctx.fillStyle='#f5f0e8';ctx.fillRect(0,0,W/scale,H/scale);
-  // Grid
-  ctx.strokeStyle='#c8c2b4';ctx.lineWidth=0.8;
-  for(let c=minC;c<=maxC+1;c++){ctx.beginPath();ctx.moveTo((c-minC)*CELL,0);ctx.lineTo((c-minC)*CELL,usedRows*CELL);ctx.stroke();}
-  for(let r=minR;r<=maxR+1;r++){ctx.beginPath();ctx.moveTo(0,(r-minR)*CELL);ctx.lineTo(usedCols*CELL,(r-minR)*CELL);ctx.stroke();}
+  ctx.fillStyle='#f5f0e8';ctx.fillRect(0,0,W,H);
+
+  // Grid lines
+  ctx.strokeStyle='#c8c2b4';ctx.lineWidth=S*0.8;
+  for(let c=0;c<=usedCols;c++){ctx.beginPath();ctx.moveTo(c*C,0);ctx.lineTo(c*C,H);ctx.stroke();}
+  for(let r=0;r<=usedRows;r++){ctx.beginPath();ctx.moveTo(0,r*C);ctx.lineTo(W,r*C);ctx.stroke();}
+
   // Walls
-  ctx.strokeStyle='#1a1a2e';ctx.lineWidth=3;ctx.lineCap='square';
+  ctx.strokeStyle='#1a1a2e';ctx.lineWidth=S*3;ctx.lineCap='square';
   for(const key of walls){
-    const[tp,rs,cs]=key.split(':');const r=+rs,c=+cs;
-    if(r<minR-1||r>maxR+1||c<minC-1||c>maxC+1)continue;
+    const[tp,rs,cs]=key.split(':');const r=+rs,gc=+cs;
+    if(r<minR-1||r>maxR+1||gc<minC-1||gc>maxC+1)continue;
     ctx.beginPath();
-    if(tp==='h'){ctx.moveTo((c-minC)*CELL,(r-minR+1)*CELL);ctx.lineTo((c-minC+1)*CELL+offX%CELL,(r-minR+1)*CELL);}
-    else{ctx.moveTo((c-minC+1)*CELL,(r-minR)*CELL);ctx.lineTo((c-minC+1)*CELL,(r-minR+1)*CELL);}
+    if(tp==='h'){ctx.moveTo((gc-minC)*C,(r-minR+1)*C);ctx.lineTo((gc-minC+1)*C,(r-minR+1)*C);}
+    else{ctx.moveTo((gc-minC+1)*C,(r-minR)*C);ctx.lineTo((gc-minC+1)*C,(r-minR+1)*C);}
     ctx.stroke();
   }
+
   // Desks
+  const pad=S*2, rad=S*6;
   for(const desk of desks){
     const gc=desk.groupColor;
-    const x=(desk.col-minC)*CELL+2,y=(desk.row-minR)*CELL+2,w=CELL-4,h=CELL-4;
+    const x=(desk.col-minC)*C+pad,y=(desk.row-minR)*C+pad;
+    const w=C-pad*2,h=C-pad*2;
     ctx.save();
-    ctx.beginPath();ctx.roundRect(x,y,w,h,6);
-    ctx.fillStyle=gc||(desk.studentId?'#d4f0ed':'#fffef9');
-    ctx.fill();
-    ctx.strokeStyle=gc||'#d4cfc4';ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.roundRect(x,y,w,h,rad);
+    ctx.fillStyle=gc||(desk.studentId?'#d4f0ed':'#fffef9');ctx.fill();
+    ctx.strokeStyle=gc||'#d4cfc4';ctx.lineWidth=S*2;ctx.stroke();
     const student=desk.studentId?students.find(s=>s.id===desk.studentId):null;
     if(student){
       const textColor=gc?(isColorDark(gc)?'#fff':'#1a1a2e'):'#1a1a2e';
       ctx.fillStyle=textColor;
       ctx.textAlign='center';ctx.textBaseline='middle';
-      const pad=4; // px padding inside desk
-      const maxW=w-pad*2;
+      const innerPad=S*6;
+      const maxTW=w-innerPad*2;
       const parts=student.name.split(' ');
       const firstName=parts[0];
-      const lastInitials=parts.slice(1).map(p=>p[0]+'.').join(' ');
-
-      // Helper: find largest font size where text fits within maxW
-      function fitFont(text,maxSize,bold){
-        let size=maxSize;
-        while(size>7){
-          ctx.font=`${bold?'bold ':''}${size}px Arial,sans-serif`;
-          if(ctx.measureText(text).width<=maxW) break;
-          size--;
+      function fitFont(text,maxSz,bold){
+        let sz=maxSz;
+        while(sz>S*7){
+          ctx.font=`${bold?'bold ':''}${sz}px Arial,sans-serif`;
+          if(ctx.measureText(text).width<=maxTW)break;
+          sz-=S;
         }
-        return size;
+        return sz;
       }
-
       if(parts.length===1){
         const sz=fitFont(firstName,Math.floor(h*0.32),true);
         ctx.font=`bold ${sz}px Arial,sans-serif`;
         ctx.fillText(firstName,x+w/2,y+h/2);
       }else{
-        const sz1=fitFont(firstName,Math.floor(h*0.28),true);
+        const sz1=fitFont(firstName,Math.floor(h*0.26),true);
         ctx.font=`bold ${sz1}px Arial,sans-serif`;
         const lineH=sz1*1.25;
-        ctx.fillText(firstName,x+w/2,y+h/2-lineH*0.4);
-        const sz2=fitFont(lastInitials,Math.floor(sz1*0.85),false);
-        ctx.font=`${sz2}px Arial,sans-serif`;
-        ctx.fillText(lastInitials,x+w/2,y+h/2+lineH*0.6);
+        ctx.fillText(firstName,x+w/2,y+h/2-lineH*0.45);
+        const lastStr=parts.slice(1).map(p=>p[0]).join(' ');
+        const sz2=fitFont(lastStr,Math.floor(h*0.26),true);
+        ctx.font=`bold ${sz2}px Arial,sans-serif`;
+        ctx.fillText(lastStr,x+w/2,y+h/2+lineH*0.6);
       }
     }
     ctx.restore();
   }
-  // Room objects (draw as colored rects with labels — SVG loading async is complex)
-  // Draw room objects — same styled-box as editor
+
+  // Room objects
   for(const obj of roomObjs){
-    const[pw,ph]=getObjPxSize(obj.type,obj.rotation,obj);
-    const x=(obj.col-minC)*CELL+2,y=(obj.row-minR)*CELL+2;
+    const[rawPw,rawPh]=getObjPxSize(obj.type,obj.rotation,obj);
+    const pw=rawPw*S,ph=rawPh*S;
+    const x=(obj.col-minC)*C+pad,y=(obj.row-minR)*C+pad;
     const sty=OBJ_STYLE[obj.type]||['#e8e0d4','#9b59b6','#333','?'];
     ctx.save();
     if(obj.type==='label'){
       const lc=obj.color||'#ffe066';
       const isCircle=(obj.lw||1)===1&&(obj.lh||1)===1;
       ctx.beginPath();
-      if(isCircle){
-        ctx.arc(x+pw/2,y+ph/2,Math.min(pw,ph)/2-1,0,Math.PI*2);
-      }else{
-        ctx.roundRect(x,y,pw,ph,8);
-      }
+      if(isCircle){ctx.arc(x+pw/2,y+ph/2,Math.min(pw,ph)/2-S,0,Math.PI*2);}
+      else{ctx.roundRect(x,y,pw,ph,S*8);}
       ctx.fillStyle=lc;ctx.fill();
-      ctx.strokeStyle=darkenColor(lc,30);ctx.lineWidth=2;ctx.stroke();
-      // Fit text inside label
+      ctx.strokeStyle=darkenColor(lc,30);ctx.lineWidth=S*2;ctx.stroke();
       ctx.fillStyle=isColorDark(lc)?'#fff':'rgba(0,0,0,0.72)';
       ctx.textAlign='center';ctx.textBaseline='middle';
       const labelText=obj.text||'?';
-      const pad=8;
-      const maxLabelW=pw-pad*2;
+      const maxLW=pw-S*16;
       let lsz=Math.floor(Math.min(pw,ph)*0.28);
-      while(lsz>8){
+      while(lsz>S*8){
         ctx.font=`bold ${lsz}px Arial,sans-serif`;
-        if(ctx.measureText(labelText).width<=maxLabelW)break;
-        lsz--;
+        if(ctx.measureText(labelText).width<=maxLW)break;
+        lsz-=S;
       }
       ctx.font=`bold ${lsz}px Arial,sans-serif`;
       ctx.fillText(labelText,x+pw/2,y+ph/2);
     }else{
-      // Box
-      ctx.beginPath();ctx.roundRect(x,y,pw,ph,4);
-      ctx.fillStyle=sty[0];ctx.fill();
-      ctx.strokeStyle=sty[1];ctx.lineWidth=2;ctx.stroke();
-      // Icon
-      const iconSize=Math.min(pw,ph)*0.38;
-      ctx.font=`${iconSize}px sans-serif`;
-      ctx.fillStyle=sty[1];
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(sty[3],x+pw/2,y+ph/2-6);
-      // Type label
-      const lblSize=Math.min(pw*0.18,9);
-      ctx.font=`${lblSize}px DM Mono,monospace`;
-      ctx.fillStyle=sty[2];
-      ctx.fillText(t('obj'+obj.type.charAt(0).toUpperCase()+obj.type.slice(1)),x+pw/2,y+ph-8);
+      await new Promise(resolve=>{
+        const img=new Image();
+        img.onload=()=>{
+          ctx.save();
+          ctx.translate(x+pw/2,y+ph/2);
+          ctx.rotate(obj.rotation*Math.PI/180);
+          const[natW,natH]=(obj.rotation===90||obj.rotation===270)?[ph,pw]:[pw,ph];
+          ctx.drawImage(img,-natW/2,-natH/2,natW,natH);
+          ctx.restore();
+          resolve();
+        };
+        img.onerror=resolve;
+        img.src=OBJ_SVGS[obj.type]||'';
+      });
     }
     ctx.restore();
   }
@@ -1674,13 +1727,13 @@ async function renderClassroomToCanvas(scale=2){
 }
 
 async function exportImage(){
-  const canvas=await renderClassroomToCanvas(3);
+  const canvas=await renderClassroomToCanvas();
   const a=document.createElement('a');
   a.href=canvas.toDataURL('image/png');a.download='classroom.png';a.click();
 }
 
 async function exportPDF(){
-  const canvas=await renderClassroomToCanvas(2);
+  const canvas=await renderClassroomToCanvas();
   const{minC,maxC,minR,maxR}=getUsedBounds();
   const usedCols=maxC-minC+1,usedRows=maxR-minR+1;
   const wMM=usedCols*CELL*0.264583,hMM=usedRows*CELL*0.264583;
@@ -1750,19 +1803,6 @@ window.addEventListener('keydown',e=>{
 // ══════════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════════
-// Pre-load SVG data URIs for canvas export
-const OBJ_SVG_DATA={};
-async function loadSVGsForExport(){
-  for(const[type,src]of Object.entries(OBJ_SVGS)){
-    try{
-      const r=await fetch(src);
-      const txt=await r.text();
-      const b64=btoa(unescape(encodeURIComponent(txt)));
-      OBJ_SVG_DATA[type]='data:image/svg+xml;base64,'+b64;
-    }catch(e){OBJ_SVG_DATA[type]=null;}
-  }
-}
-
 // ── DROPDOWN LOGIC ──
 function closeDropdowns(){
   document.querySelectorAll('.dropdown-menu.open').forEach(m=>m.classList.remove('open'));
@@ -1806,7 +1846,24 @@ function setupDropdowns(){
   document.addEventListener('click',()=>closeDropdowns());
 }
 
+function zoomGrid(dir){
+  const newCell=CELL+dir*CELL_STEP;
+  if(newCell<CELL_MIN||newCell>CELL_MAX)return;
+  const scroll=document.getElementById('canvas-scroll');
+  const cx=(scroll.scrollLeft+scroll.clientWidth/2)/CELL;
+  const cy=(scroll.scrollTop+scroll.clientHeight/2)/CELL;
+  CELL=newCell;
+  document.documentElement.style.setProperty('--cell',CELL+'px');
+  setupGrid();renderDesks();renderRoomObjs();
+  scroll.scrollLeft=cx*CELL-scroll.clientWidth/2;
+  scroll.scrollTop=cy*CELL-scroll.clientHeight/2;
+  document.getElementById('zoom-in').disabled=CELL>=CELL_MAX;
+  document.getElementById('zoom-out').disabled=CELL<=CELL_MIN;
+  document.getElementById('zoom-pct').textContent=Math.round(CELL/48*100)+'%';
+}
+
 const savedMode=loadState();
+document.documentElement.style.setProperty('--cell',CELL+'px');
 setupGrid();
 setupInteractionLayer();
 attachDeskLayerListeners();
@@ -1818,7 +1875,6 @@ renderDesks();
 renderRoomObjs();
 updateStatus();
 setMode(savedMode||'desk');
-loadSVGsForExport();
 setupDropdowns();
 </script>
 </body>
